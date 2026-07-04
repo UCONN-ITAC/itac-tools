@@ -1,41 +1,89 @@
 /* ==========================================================================
-   ITAC Tools — standalone theme
+   ITAC Tools — UConn ITAC Design System theme
    --------------------------------------------------------------------------
-   The calculators were ported from the Zensical (Material for MkDocs) docs
-   site. Their inline styles reference six Material CSS custom properties. We
-   redefine just those here so the widgets render identically without the
-   framework. Values mirror Material's default (indigo) light palette and its
-   "slate" dark palette.
+   Re-styled to the "UConn ITAC Design System" brand: institutional credibility
+   with the clarity of an engineering deliverable. Cobalt anchor, blue-tinted
+   neutrals, off-white pages / white cards, DM Sans prose + DM Mono figures,
+   borders over shadows.
+
+   The calculator widgets were ported from Material for MkDocs and reference six
+   `--md-*` custom properties inline. We keep those names as a compatibility
+   shim and map them onto the brand tokens, so every widget picks up the brand
+   palette without touching its markup.
    ========================================================================== */
 
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+
 :root {
-  --md-default-bg-color: #ffffff;
-  --md-default-fg-color: rgba(0, 0, 0, 0.87);
-  --md-default-fg-color--light: rgba(0, 0, 0, 0.54);
-  --md-default-fg-color--lightest: rgba(0, 0, 0, 0.12);
-  --md-code-bg-color: #f5f5f5;
-  --md-primary-fg-color: #4051b5;
+  /* ---- Brand palette ---------------------------------------------------- */
+  --color-cobalt: #013ecd;        /* primary / brand anchor */
+  --color-cobalt-dark: #012da0;   /* hover / active on primary */
+  --color-cobalt-light: #3a6ad9;  /* lighter accent */
+  --color-cobalt-pale: #d6e0fa;   /* selected row, info background */
+  --color-cobalt-palest: #eef3fd; /* section background wash */
+
+  --color-azure: #00a6fb;         /* links, interactive */
+  --color-green: #20bf55;         /* success, savings */
+  --color-crimson: #db2955;       /* error, critical flags */
+  --color-orange: #ff7700;        /* warning, highlight */
+
+  --color-ink: #0d1426;
+  --color-gray-700: #3d4659;
+  --color-gray-500: #6b7385;
+  --color-gray-300: #c7ccd6;
+  --color-gray-100: #eef0f4;
+  --color-offwhite: #fafbfc;
+  --color-white: #ffffff;
+
+  /* ---- Type ------------------------------------------------------------- */
+  --font-sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
+
+  /* ---- Shape ------------------------------------------------------------ */
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(13, 20, 38, 0.06);
+  --shadow-2: 0 4px 12px rgba(13, 20, 38, 0.10);
+  --ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* ---- Brand gradient (signature cobalt → azure → green sweep) ---------- */
+  --gradient-brand: linear-gradient(90deg, #013ecd 0%, #00a6fb 55%, #20bf55 100%);
+
+  /* ---- Page surface (body) ---------------------------------------------- */
+  --page-bg: var(--color-offwhite);
+
+  /* ---- Material compatibility shim — LIGHT ------------------------------ */
+  --md-default-bg-color: var(--color-white);          /* inputs, result panels */
+  --md-default-fg-color: var(--color-ink);            /* body text */
+  --md-default-fg-color--light: var(--color-gray-500);/* captions, secondary */
+  --md-default-fg-color--lightest: var(--color-gray-300); /* borders, dividers */
+  --md-code-bg-color: var(--color-white);             /* calculator card surface */
+  --md-primary-fg-color: var(--color-cobalt);         /* buttons, links, accents */
 }
 
-/* Dark palette — applied when the OS prefers dark and the user hasn't forced
-   light, or when the user explicitly toggles dark. */
+/* Dark palette — derived from the brand ink neutral so the toggle keeps
+   working. Applied when the OS prefers dark and the user hasn't forced light,
+   or when the user explicitly toggles dark. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --md-default-bg-color: #2e303e;
-    --md-default-fg-color: rgba(255, 255, 255, 0.87);
-    --md-default-fg-color--light: rgba(255, 255, 255, 0.54);
-    --md-default-fg-color--lightest: rgba(255, 255, 255, 0.12);
-    --md-code-bg-color: #21222c;
-    --md-primary-fg-color: #4051b5;
+    --page-bg: #0a1120;
+    --md-default-bg-color: #111a2e;
+    --md-default-fg-color: rgba(255, 255, 255, 0.90);
+    --md-default-fg-color--light: #9aa3b5;
+    --md-default-fg-color--lightest: rgba(255, 255, 255, 0.14);
+    --md-code-bg-color: #0f1728;
+    --md-primary-fg-color: var(--color-cobalt-light);
   }
 }
 :root[data-theme="dark"] {
-  --md-default-bg-color: #2e303e;
-  --md-default-fg-color: rgba(255, 255, 255, 0.87);
-  --md-default-fg-color--light: rgba(255, 255, 255, 0.54);
-  --md-default-fg-color--lightest: rgba(255, 255, 255, 0.12);
-  --md-code-bg-color: #21222c;
-  --md-primary-fg-color: #4051b5;
+  --page-bg: #0a1120;
+  --md-default-bg-color: #111a2e;
+  --md-default-fg-color: rgba(255, 255, 255, 0.90);
+  --md-default-fg-color--light: #9aa3b5;
+  --md-default-fg-color--lightest: rgba(255, 255, 255, 0.14);
+  --md-code-bg-color: #0f1728;
+  --md-primary-fg-color: var(--color-cobalt-light);
 }
 
 /* ---- Base page ---------------------------------------------------------- */
@@ -44,104 +92,210 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
-  background: var(--md-default-bg-color);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  background: var(--page-bg);
   color: var(--md-default-fg-color);
-  line-height: 1.6;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 a { color: var(--md-primary-fg-color); }
 
+/* Every number reads in DM Mono — the system's signature. */
+input[type="number"],
+input[type="text"],
+select,
+pre,
+code,
+kbd { font-family: var(--font-mono); }
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-cobalt);
+  outline-offset: 2px;
+}
+
 .container {
   max-width: 1240px;
   margin: 0 auto;
-  padding: 0 20px 60px;
+  padding: 0 24px 64px;
 }
 
 /* ---- Header / nav ------------------------------------------------------- */
 
 .site-header {
+  border-top: 3px solid transparent;
+  border-image: var(--gradient-brand) 1;
   border-bottom: 1px solid var(--md-default-fg-color--lightest);
   background: var(--md-default-bg-color);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 .site-header .bar {
   max-width: 1240px;
   margin: 0 auto;
-  padding: 14px 20px;
+  padding: 12px 24px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 .site-header .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
   color: var(--md-default-fg-color);
   text-decoration: none;
   white-space: nowrap;
 }
+.site-header .brand-mark {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
 .site-header nav {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
   font-size: 0.9rem;
 }
 .site-header nav a {
   text-decoration: none;
   color: var(--md-default-fg-color--light);
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+  transition: color var(--duration, 150ms) var(--ease-standard);
 }
-.site-header nav a:hover,
-.site-header nav a.active { color: var(--md-primary-fg-color); }
+.site-header nav a:hover { color: var(--md-primary-fg-color); }
+.site-header nav a.active {
+  color: var(--md-primary-fg-color);
+  border-bottom-color: var(--color-cobalt);
+}
 .site-header .spacer { flex: 1; }
 
 .theme-toggle {
+  font-family: var(--font-mono);
   background: none;
   border: 1px solid var(--md-default-fg-color--lightest);
   color: var(--md-default-fg-color--light);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  padding: 5px 14px;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   line-height: 1;
+  transition: color 150ms var(--ease-standard),
+              border-color 150ms var(--ease-standard);
 }
-.theme-toggle:hover { color: var(--md-primary-fg-color); }
+.theme-toggle:hover {
+  color: var(--md-primary-fg-color);
+  border-color: var(--color-cobalt);
+}
 
 /* ---- Content ------------------------------------------------------------ */
 
-h1 { font-size: 1.9rem; margin: 32px 0 12px; }
-h2 { font-size: 1.4rem; margin: 28px 0 10px; }
-.lead { color: var(--md-default-fg-color--light); max-width: 70ch; }
+.eyebrow {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-cobalt);
+  margin: 40px 0 10px;
+}
+:root[data-theme="dark"] .eyebrow,
+[data-theme="dark"] .eyebrow { color: var(--color-cobalt-light); }
+
+h1 {
+  font-size: 34px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  margin: 6px 0 14px;
+}
+.eyebrow + h1 { margin-top: 0; }
+h2 { font-size: 26px; line-height: 1.2; letter-spacing: -0.01em; margin: 32px 0 12px; }
+h3 { font-size: 20px; margin: 24px 0 10px; }
+
+.lead {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+  max-width: 72ch;
+}
+
+main p { max-width: 74ch; }
 
 /* ---- Landing cards ------------------------------------------------------ */
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 18px;
-  margin: 28px 0;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin: 32px 0;
 }
 .tool-card {
-  display: block;
-  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 22px 18px;
   border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   text-decoration: none;
   color: inherit;
-  background: var(--md-code-bg-color);
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  background: var(--md-default-bg-color);
+  box-shadow: var(--shadow-1);
+  transition: border-color 180ms var(--ease-standard),
+              box-shadow 180ms var(--ease-standard),
+              transform 180ms var(--ease-standard);
 }
 .tool-card:hover {
-  border-color: var(--md-primary-fg-color);
+  border-color: var(--color-cobalt);
+  box-shadow: var(--shadow-2);
   transform: translateY(-2px);
 }
-.tool-card h3 { margin: 0 0 8px; color: var(--md-primary-fg-color); }
-.tool-card p { margin: 0; color: var(--md-default-fg-color--light); font-size: 0.92rem; }
+.tool-card .eyebrow { margin: 0 0 10px; }
+.tool-card h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--md-default-fg-color);
+}
+.tool-card p {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.92rem;
+  flex: 1;
+}
+.tool-card::after {
+  content: "Open \2192";
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--color-cobalt);
+}
+:root[data-theme="dark"] .tool-card::after,
+[data-theme="dark"] .tool-card::after { color: var(--color-cobalt-light); }
+
+/* ---- Buttons (shared subtle interaction for inline-styled widgets) ------ */
+
+button { transition: filter 150ms var(--ease-standard); }
+button:hover:not(:disabled) { filter: brightness(0.95); }
+
+/* ---- Footer ------------------------------------------------------------- */
 
 .site-footer {
   border-top: 1px solid var(--md-default-fg-color--lightest);
   color: var(--md-default-fg-color--light);
   font-size: 0.85rem;
-  padding: 24px 20px;
+  padding: 28px 24px;
   text-align: center;
 }

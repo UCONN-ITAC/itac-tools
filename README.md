@@ -4,11 +4,6 @@ Interactive energy-assessment calculators for the **Southern New England
 Industrial Training and Assessment Center (ITAC)**, hosted at
 **[tools.industrialassessment.com](https://tools.industrialassessment.com)**.
 
-These were factored out of the main documentation site
-([itac-docs](https://github.com/UCONN-ITAC/itac-docs) →
-[industrialassessment.com](https://industrialassessment.com)) into a standalone,
-framework-free static site.
-
 ## Calculators
 
 | Page | Purpose |
@@ -42,16 +37,3 @@ No toolchain required — just serve the directory:
 python3 -m http.server 8899
 # then open http://localhost:8899/
 ```
-
-## Deployment
-
-Deployed via **Cloudflare Pages** (Git-connected) to
-`tools.industrialassessment.com`. There is no build command — the output
-directory is the repository root.
-
-## Keeping in sync with the docs site
-
-The calculator JavaScript originates in
-`itac-docs/docs/assets/javascript/`. When a calculator's logic changes there,
-copy the updated `.js` into `assets/js/` here (the files are byte-for-byte
-copies).

@@ -13,12 +13,12 @@
     document.documentElement.setAttribute("data-theme", theme);
     try { localStorage.setItem("itac-tools-theme", theme); } catch (e) {}
     var btn = document.querySelector(".theme-toggle");
-    if (btn) btn.textContent = theme === "dark" ? "☀️" : "🌙";
+    if (btn) btn.textContent = theme === "dark" ? "Light" : "Dark";
   }
   function init() {
     var btn = document.querySelector(".theme-toggle");
     if (!btn) return;
-    btn.textContent = current() === "dark" ? "☀️" : "🌙";
+    btn.textContent = current() === "dark" ? "Light" : "Dark";
     btn.addEventListener("click", function () {
       apply(current() === "dark" ? "light" : "dark");
     });
