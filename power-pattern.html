@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Power Pattern Analyzer — ITAC Tools</title>
+  <meta name="description" content="Weekly power-pattern analysis and equivalent full-load hours (EFLH) from logged CT current data.">
+  <link rel="icon" href="assets/brand/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/theme.css">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("itac-tools-theme");
+        if (t) document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="bar">
+      <a class="brand" href="index.html">
+        <img class="brand-mark" src="assets/brand/mark.svg" alt="">
+        ITAC Tools
+      </a>
+      <nav>
+        <a href="leak-rate.html">Leak Rate</a>
+        <a href="power-pattern.html" class="active">Power Pattern</a>
+        <a href="cold-intake.html">Cold Intake</a>
+        <a href="heat-recovery.html">Heat Recovery</a>
+        <a href="vsd-efficiency.html">VSD Efficiency</a>
+      </nav>
+      <div class="spacer"></div>
+      <button class="theme-toggle" aria-label="Toggle dark mode">🌙</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <span class="eyebrow">Compressed air</span>
+    <h1>Power pattern analyzer</h1>
+
+    <p class="lead">Upload logged CT current data to visualize the weekly power
+      pattern, then compute average power and equivalent full-load hours (EFLH)
+      for the compressor. These feed the System Profile and Day Types sections
+      of a MEASUR setup.</p>
+
+    <div id="power-pattern-calc" style="max-width: 1200px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: var(--md-code-bg-color);">
+
+    <h3>Step 1: Upload CSV File</h3>
+
+    <div style="margin: 15px 0;">
+        <input type="file" id="csvFileInput" accept=".csv" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+        <button id="loadDataBtn" style="margin-left: 10px; padding: 8px 16px; background: #4051b5; color: white; border: none; border-radius: 4px; cursor: pointer;">Load Data</button>
+    </div>
+
+    <div id="reuseNotice" style="margin: 10px 0; font-size: 0.9em; color: var(--md-default-fg-color--light); display: none;"></div>
+    <div id="fileInfo" style="margin: 10px 0; font-size: 0.9em; color: var(--md-default-fg-color--light);"></div>
+    <div id="errorBox"></div>
+
+    <div id="columnMapping" style="margin: 10px 0; display: none;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-width: 620px;">
+            <div>
+                <label for="dtColSelect" style="display: block; margin-bottom: 5px; font-weight: 500;">Date/Time column:</label>
+                <select id="dtColSelect" style="width: 100%; padding: 8px;"></select>
+            </div>
+            <div>
+                <label for="currentColSelect" style="display: block; margin-bottom: 5px; font-weight: 500;">Current (A) column:</label>
+                <select id="currentColSelect" style="width: 100%; padding: 8px;"></select>
+            </div>
+        </div>
+    </div>
+
+    <h3>Step 2: System Parameters</h3>
+
+    <div style="margin: 15px 0; padding: 15px; background: var(--md-default-bg-color); border-radius: 6px;">
+        <p style="font-size: 0.9em; color: var(--md-default-fg-color--light); margin-bottom: 10px;">
+            Real power is calculated as: P = √3 × V × I × PF
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+            <div>
+                <label for="systemVoltage" style="display: block; margin-bottom: 5px; font-weight: 500;">System Voltage (V):</label>
+                <input type="number" id="systemVoltage" placeholder="460" step="1" value="460" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">208 · 240 · 480 · 600</p>
+            </div>
+            <div>
+                <label for="powerFactor" style="display: block; margin-bottom: 5px; font-weight: 500;">Power Factor:</label>
+                <input type="number" id="powerFactor" placeholder="0.90" step="0.01" min="0.5" max="1" value="0.90" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Typical 0.80–0.95</p>
+            </div>
+            <div>
+                <label for="nameplateKw" style="display: block; margin-bottom: 5px; font-weight: 500;">Nameplate Power (kW):</label>
+                <input type="number" id="nameplateKw" placeholder="75" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Full-load compressor kW</p>
+            </div>
+        </div>
+    </div>
+
+    <h3>Step 3: Weekly Power Pattern</h3>
+
+    <div id="weeklyHeatmap" style="margin: 20px 0; height: 360px; display: none;"></div>
+    <div id="hourlyProfile" style="margin: 20px 0; height: 320px; display: none;"></div>
+
+    <h3>Step 4: Operating Days</h3>
+
+    <div style="margin: 15px 0; padding: 15px; background: var(--md-default-bg-color); border-radius: 6px;">
+        <p style="font-size: 0.9em; color: var(--md-default-fg-color--light); margin-bottom: 10px;">
+            Select the days that represent normal operation. Weeks/year scales the
+            representative week to an annual estimate.
+        </p>
+        <div id="operatingDays" style="display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;"></div>
+        <div style="max-width: 200px;">
+            <label for="weeksPerYear" style="display: block; margin-bottom: 5px; font-weight: 500;">Weeks per year:</label>
+            <input type="number" id="weeksPerYear" step="1" min="1" max="52" value="52" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+    </div>
+
+    <h3>Step 5: Results</h3>
+
+    <div style="margin: 20px 0;">
+        <button id="calcBtn" style="padding: 12px 24px; background: #4051b5; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1.1em; font-weight: 500;">Compute EFLH &amp; Average Power</button>
+    </div>
+
+    <div id="results" style="margin: 20px 0; padding: 20px; background: var(--md-default-bg-color); border-radius: 6px; display: none;">
+        <h3 style="margin-top: 0; color: #4caf50;">Results</h3>
+        <div id="resultsContent"></div>
+    </div>
+
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    &copy; Southern New England Industrial Training and Assessment Center
+  </footer>
+
+  <script src="assets/js/site.js"></script>
+  <script src="assets/js/extra.js"></script>
+  <script src="assets/js/power-profile.js"></script>
+  <script src="assets/js/power-pattern.js"></script>
+</body>
+</html>

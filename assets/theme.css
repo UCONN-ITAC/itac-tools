@@ -285,6 +285,24 @@ main p { max-width: 74ch; }
 :root[data-theme="dark"] .tool-card::after,
 [data-theme="dark"] .tool-card::after { color: var(--color-cobalt-light); }
 
+/* ---- Form controls (themed defaults) ------------------------------------
+   Base styling so calculator inputs read correctly in light AND dark mode.
+   Pages may still set inline widths/padding; those that previously hardcoded
+   `background: white; color: black` should drop the colors and inherit these.
+   Inline `--md-*` styles (used by cold-intake / heat-recovery) still win. */
+
+input[type="number"],
+input[type="text"],
+input[type="datetime-local"],
+input[type="file"],
+select,
+textarea {
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: var(--radius-md);
+}
+
 /* ---- Buttons (shared subtle interaction for inline-styled widgets) ------ */
 
 button { transition: filter 150ms var(--ease-standard); }

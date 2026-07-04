@@ -2,11 +2,53 @@
 //
 // Functions called from inline onclick=/onchange= attributes (loadCSV,
 // addVFDPoint, removeVFDPoint, calculateLeakRate, updateControlTypeUI) MUST
-// remain global, so this file is not wrapped in an IIFE. Plotly is lazy-loaded
-// on demand via loadScriptOnce (defined in extra.js).
+// remain global, so this file is not wrapped in an IIFE. CSV parsing, datetime
+// parsing and the power calculation are delegated to the shared PowerProfile
+// engine (assets/js/power-profile.js), which loads before this file. Plotly is
+// lazy-loaded on demand via loadScriptOnce (defined in extra.js).
 
 let csvData = [];
 let headers = [];
+
+// --- input getters ---------------------------------------------------------
+
+function getVoltage() {
+    return parseFloat(document.getElementById('systemVoltage').value);
+}
+
+// Power factor for the √3·V·I·PF real-power calculation. Defaults to 0.90
+// (typical loaded compressor motor) when the field is blank or absent.
+function getPowerFactor() {
+    const el = document.getElementById('powerFactor');
+    const pf = el ? parseFloat(el.value) : NaN;
+    return isNaN(pf) || pf <= 0 ? 0.90 : pf;
+}
+
+function getDtCol() {
+    const sel = document.getElementById('dtColSelect');
+    return sel && sel.value !== '' ? sel.value : headers[1];
+}
+
+function getCurrentCol() {
+    const sel = document.getElementById('currentColSelect');
+    return sel && sel.value !== '' ? sel.value : headers[2];
+}
+
+function rowPower(row) {
+    return window.PowerProfile.computePower({
+        voltage: getVoltage(),
+        current: parseFloat(row[getCurrentCol()]),
+        powerFactor: getPowerFactor()
+    });
+}
+
+// Inline validation message (replaces alert()), shown in the results panel.
+function showLeakError(msg) {
+    document.getElementById('resultsContent').innerHTML = window.PowerProfile.errorHTML(msg);
+    document.getElementById('results').style.display = 'block';
+}
+
+// --- UI plumbing -----------------------------------------------------------
 
 function updateControlTypeUI() {
     const controlType = document.querySelector('input[name="controlType"]:checked').value;
@@ -20,8 +62,8 @@ function addVFDPoint() {
     newPoint.className = 'vfd-point';
     newPoint.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;';
     newPoint.innerHTML = `
-        <input type="number" class="vfd-power" placeholder="kW" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
-        <input type="number" class="vfd-flow" placeholder="CFM" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+        <input type="number" class="vfd-power" placeholder="kW" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+        <input type="number" class="vfd-flow" placeholder="CFM" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
         <button onclick="removeVFDPoint(this)" style="padding: 6px; background: #d32f2f; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>
     `;
     container.appendChild(newPoint);
@@ -32,7 +74,7 @@ function removeVFDPoint(button) {
     if (points.length > 4) {
         button.parentElement.remove();
     } else {
-        alert('Minimum 4 data points required for VFD interpolation');
+        showLeakError('Minimum 4 data points required for VFD interpolation.');
     }
 }
 
@@ -41,74 +83,101 @@ function loadCSV() {
     const file = fileInput.files[0];
 
     if (!file) {
-        alert('Please select a CSV file');
+        showLeakError('Please select a CSV file.');
         return;
     }
 
     const reader = new FileReader();
     reader.onload = function(e) {
-        const text = e.target.result;
-        parseCSV(text);
+        parseAndLoad(e.target.result, file.name);
     };
     reader.readAsText(file);
 }
 
-function parseCSV(text) {
-    const lines = text.split('\n').filter(line => line.trim());
-    headers = lines[0].split(',').map(h => h.trim());
+// Populate the datetime / current column dropdowns from the parsed headers,
+// defaulting to columns 1 and 2 (the historical fixed layout).
+function populateColumnSelects() {
+    const dtSel = document.getElementById('dtColSelect');
+    const curSel = document.getElementById('currentColSelect');
+    if (!dtSel || !curSel) return;
 
-    csvData = [];
-    for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',');
-        const row = {};
-        headers.forEach((header, index) => {
-            row[header] = values[index] ? values[index].trim() : '';
-        });
-        csvData.push(row);
+    const optionsHtml = headers.map(function (h, i) {
+        return '<option value="' + h.replace(/"/g, '&quot;') + '">' + (i + 1) + ': ' + h + '</option>';
+    }).join('');
+    dtSel.innerHTML = optionsHtml;
+    curSel.innerHTML = optionsHtml;
+
+    dtSel.selectedIndex = Math.min(1, headers.length - 1);
+    curSel.selectedIndex = Math.min(2, headers.length - 1);
+
+    const wrap = document.getElementById('columnMapping');
+    if (wrap) wrap.style.display = 'block';
+}
+
+function parseAndLoad(text, fileName) {
+    const parsed = window.PowerProfile.parseCSV(text);
+    headers = parsed.headers;
+    csvData = parsed.rows;
+
+    if (csvData.length === 0) {
+        showLeakError('No data rows found in the CSV file.');
+        return;
     }
 
-    // Columns are fixed: column 0 = ID, column 1 = DateTime, column 2 = Current
-    const dateTimeCol = headers[1];
-    const currentCol = headers[2];
+    populateColumnSelects();
+
+    // Cache for cross-page reuse (weekly pattern analyzer, etc.).
+    try {
+        sessionStorage.setItem('itac-csv', JSON.stringify({ name: fileName || 'uploaded.csv', text: text }));
+    } catch (e) { /* storage may be unavailable/full — non-fatal */ }
+
+    onDataOrColumnsChanged();
+}
+
+// Recompute the file summary, default period and histogram. Called after a
+// fresh upload and whenever the column selection changes.
+function onDataOrColumnsChanged() {
+    if (csvData.length === 0) return;
+    const dtCol = getDtCol();
+    const series = buildSeries();
+    const timestep = window.PowerProfile.detectTimestepMinutes(series);
 
     document.getElementById('fileInfo').innerHTML = `
         <strong>✓ File loaded:</strong> ${csvData.length} data points |
-        Timestep: ${calculateTimestep()} minutes<br>
-        <strong>DateTime Column:</strong> ${dateTimeCol} | <strong>Current Column:</strong> ${currentCol}
+        Timestep: ${timestep == null ? 'unknown' : Math.round(timestep)} minutes<br>
+        <strong>DateTime Column:</strong> ${dtCol} | <strong>Current Column:</strong> ${getCurrentCol()}
     `;
 
-    // Set default period to full range
-    const firstDate = parseDateString(csvData[0][dateTimeCol]);
-    const lastDate = parseDateString(csvData[csvData.length - 1][dateTimeCol]);
-
-    document.getElementById('startTime').value = formatDateTimeLocal(firstDate);
-    document.getElementById('endTime').value = formatDateTimeLocal(lastDate);
+    if (series.length > 0) {
+        document.getElementById('startTime').value = formatDateTimeLocal(series[0].t);
+        document.getElementById('endTime').value = formatDateTimeLocal(series[series.length - 1].t);
+    }
 
     updatePeriodInfo();
-
-    // Update histogram if voltage is entered
     updatePowerHistogram();
 }
 
+// Build a { t, kW } series from the loaded rows using the current selections.
+function buildSeries() {
+    return window.PowerProfile.buildSeries(csvData, {
+        dtCol: getDtCol(),
+        currentCol: getCurrentCol(),
+        voltage: getVoltage(),
+        powerFactor: getPowerFactor()
+    });
+}
+
 function updatePowerHistogram() {
-    const voltage = parseFloat(document.getElementById('systemVoltage').value);
+    const voltage = getVoltage();
 
     if (csvData.length === 0 || isNaN(voltage) || voltage <= 0) {
         document.getElementById('powerHistogram').style.display = 'none';
         return;
     }
 
-    const currentCol = headers[2];
-
-    // Calculate power for all data points
-    const powers = csvData.map(row => {
-        const current = parseFloat(row[currentCol]);
-        return Math.sqrt(3) * voltage * current / 1000; // kW
-    }).filter(p => !isNaN(p));
-
+    const powers = buildSeries().map(function (s) { return s.kW; });
     if (powers.length === 0) return;
 
-    // Create histogram
     const trace = {
         x: powers,
         type: 'histogram',
@@ -148,34 +217,6 @@ function updatePowerHistogram() {
             Plotly.newPlot('powerHistogram', [trace], layout, config);
         }
     });
-}
-
-function calculateTimestep() {
-    if (csvData.length < 2) return 'unknown';
-
-    const dateTimeCol = headers[1]; // DateTime is always column 1
-
-    const date1 = parseDateString(csvData[0][dateTimeCol]);
-    const date2 = parseDateString(csvData[1][dateTimeCol]);
-
-    const diffMinutes = (date2 - date1) / (1000 * 60);
-    return Math.round(diffMinutes);
-}
-
-function parseDateString(dateStr) {
-    // Format: MM/DD/YYYY HH:MM:SS
-    const parts = dateStr.split(' ');
-    const dateParts = parts[0].split('/');
-    const timeParts = parts[1].split(':');
-
-    return new Date(
-        parseInt(dateParts[2]),           // year
-        parseInt(dateParts[0]) - 1,       // month (0-indexed)
-        parseInt(dateParts[1]),           // day
-        parseInt(timeParts[0]),           // hours
-        parseInt(timeParts[1]),           // minutes
-        parseInt(timeParts[2])            // seconds
-    );
 }
 
 function formatDateTimeLocal(date) {
@@ -232,37 +273,31 @@ function linearInterpolate(x, xArray, yArray) {
 function calculateLeakRate() {
     // Validate inputs
     if (csvData.length === 0) {
-        alert('Please load a CSV file first');
+        showLeakError('Please load a CSV file first.');
         return;
     }
 
-    const voltage = parseFloat(document.getElementById('systemVoltage').value);
+    const voltage = getVoltage();
     if (isNaN(voltage) || voltage <= 0) {
-        alert('Please enter a valid system voltage');
+        showLeakError('Please enter a valid system voltage.');
         return;
     }
 
     const startTime = new Date(document.getElementById('startTime').value);
     const endTime = new Date(document.getElementById('endTime').value);
 
-    const dateTimeCol = headers[1]; // DateTime is always column 1
-    const currentCol = headers[2];  // Current is always column 2
+    const dtCol = getDtCol();
 
-    // Filter data for non-production period and calculate power
-    const periodData = csvData.filter(row => {
-        const rowDate = parseDateString(row[dateTimeCol]);
-        return rowDate >= startTime && rowDate <= endTime;
-    }).map(row => {
-        const current = parseFloat(row[currentCol]);
-        const power = Math.sqrt(3) * voltage * current / 1000; // Convert to kW
-        return {
-            ...row,
-            calculatedPower: power
-        };
+    // Filter data for non-production period and calculate power.
+    const periodData = csvData.filter(function (row) {
+        const rowDate = window.PowerProfile.parseDateTime(row[dtCol]);
+        return rowDate && rowDate >= startTime && rowDate <= endTime;
+    }).map(function (row) {
+        return Object.assign({}, row, { calculatedPower: rowPower(row) });
     });
 
     if (periodData.length === 0) {
-        alert('No data points found in selected period');
+        showLeakError('No data points found in selected period.');
         return;
     }
 
@@ -275,7 +310,7 @@ function calculateLeakRate() {
         results = calculateNonVFDLeakRate(periodData, voltage);
     }
 
-    displayResults(results, periodData, dateTimeCol, voltage);
+    displayResults(results, periodData, dtCol, voltage);
 }
 
 function calculateVFDLeakRate(periodData, voltage) {
@@ -294,7 +329,7 @@ function calculateVFDLeakRate(periodData, voltage) {
     });
 
     if (powerArray.length < 4) {
-        alert('Please enter at least 4 VFD performance points');
+        showLeakError('Please enter at least 4 VFD performance points.');
         return null;
     }
 
@@ -345,7 +380,7 @@ function calculateNonVFDLeakRate(periodData, voltage) {
     const unloadedMargin = parseFloat(document.getElementById('unloadedMargin').value) / 100;
 
     if (isNaN(loadedPower) || isNaN(loadedFlow) || isNaN(unloadedPower)) {
-        alert('Please enter all non-VFD configuration values');
+        showLeakError('Please enter all non-VFD configuration values.');
         return null;
     }
 
@@ -416,13 +451,14 @@ function calculateNonVFDLeakRate(periodData, voltage) {
 function displayResults(results, periodData, dateTimeCol, voltage) {
     if (!results) return;
 
+    const timestep = window.PowerProfile.detectTimestepMinutes(buildSeries());
     let html = `
         <div style="margin-bottom: 20px;">
             <h4 style="color: #4caf50; margin-bottom: 10px;">Leak Rate: ${results.leakRate.toFixed(1)} CFM</h4>
             <p style="margin: 5px 0;"><strong>Control Type:</strong> ${results.type}</p>
-            <p style="margin: 5px 0;"><strong>System Voltage:</strong> ${voltage} V (3-phase)</p>
+            <p style="margin: 5px 0;"><strong>System Voltage:</strong> ${voltage} V (3-phase) | <strong>Power Factor:</strong> ${getPowerFactor().toFixed(2)}</p>
             <p style="margin: 5px 0;"><strong>Data Points Analyzed:</strong> ${results.dataPoints}</p>
-            <p style="margin: 5px 0;"><strong>Timestep:</strong> ${calculateTimestep()} minutes</p>
+            <p style="margin: 5px 0;"><strong>Timestep:</strong> ${timestep == null ? 'unknown' : Math.round(timestep)} minutes</p>
         </div>
     `;
 
@@ -495,7 +531,7 @@ function displayResults(results, periodData, dateTimeCol, voltage) {
 }
 
 function plotPowerChart(periodData, dateTimeCol, results) {
-    const timestamps = periodData.map(row => parseDateString(row[dateTimeCol]));
+    const timestamps = periodData.map(row => window.PowerProfile.parseDateTime(row[dateTimeCol]));
     const powers = periodData.map(row => row.calculatedPower);
 
     let traces = [{
@@ -524,17 +560,18 @@ function plotPowerChart(periodData, dateTimeCol, results) {
         title: 'Compressor Power During Non-Production Period',
         xaxis: {title: 'Time'},
         yaxis: {title: 'Power (kW)'},
-        yaxis2: results.type === 'VFD' ? {
-            title: 'Flow (CFM)',
-            overlaying: 'y',
-            side: 'right'
-        } : undefined,
         hovermode: 'x unified',
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
         font: {color: getComputedStyle(document.body).getPropertyValue('--md-default-fg-color')},
         margin: {t: 50, b: 50, l: 60, r: results.type === 'VFD' ? 60 : 10}
     };
+
+    // Only define the secondary flow axis for VFD; passing yaxis2: undefined
+    // makes Plotly throw ("Cannot read properties of undefined (reading 'anchor')").
+    if (results.type === 'VFD') {
+        layout.yaxis2 = { title: 'Flow (CFM)', overlaying: 'y', side: 'right' };
+    }
 
     const config = {responsive: true, displayModeBar: true};
 
@@ -549,8 +586,25 @@ function plotPowerChart(periodData, dateTimeCol, results) {
 // Initialize on every page load (including instant-nav swaps). Bails out unless
 // this calculator's root element is present, and guards against double-binding
 // listeners when the user revisits the page without a hard reload.
+function offerReuse() {
+    const notice = document.getElementById('reuseNotice');
+    if (!notice) return;
+    let cached;
+    try { cached = JSON.parse(sessionStorage.getItem('itac-csv') || 'null'); } catch (e) { cached = null; }
+    if (!cached || !cached.text) return;
+    notice.style.display = 'block';
+    notice.innerHTML = 'A previously uploaded file is available: <strong>' + cached.name + '</strong>. ' +
+        '<button id="reuseBtn" style="margin-left: 8px; padding: 4px 10px; background: var(--md-primary-fg-color); color: white; border: none; border-radius: 4px; cursor: pointer;">Reuse it</button>';
+    document.getElementById('reuseBtn').addEventListener('click', function () {
+        parseAndLoad(cached.text, cached.name);
+        notice.style.display = 'none';
+    });
+}
+
 function initLeakRateCalculator() {
     if (!document.getElementById('leak-calculator')) return;
+
+    offerReuse();
 
     const startEl = document.getElementById('startTime');
     if (startEl && !startEl.dataset.lrBound) {
@@ -573,6 +627,28 @@ function initLeakRateCalculator() {
             }
         });
     }
+
+    const pfEl = document.getElementById('powerFactor');
+    if (pfEl && !pfEl.dataset.lrBound) {
+        pfEl.dataset.lrBound = 'true';
+        pfEl.addEventListener('input', function () {
+            if (csvData.length > 0) {
+                updatePowerHistogram();
+            }
+        });
+    }
+
+    ['dtColSelect', 'currentColSelect'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.lrBound) {
+            el.dataset.lrBound = 'true';
+            el.addEventListener('change', function () {
+                if (csvData.length > 0) {
+                    onDataOrColumnsChanged();
+                }
+            });
+        }
+    });
 
     updateControlTypeUI();
 }

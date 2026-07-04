@@ -25,6 +25,7 @@
       </a>
       <nav>
         <a href="leak-rate.html" class="active">Leak Rate</a>
+        <a href="power-pattern.html">Power Pattern</a>
         <a href="cold-intake.html">Cold Intake</a>
         <a href="heat-recovery.html">Heat Recovery</a>
         <a href="vsd-efficiency.html">VSD Efficiency</a>
@@ -45,22 +46,43 @@
     <h3>Step 1: Upload CSV File</h3>
 
     <div style="margin: 15px 0;">
-        <input type="file" id="csvFileInput" accept=".csv" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+        <input type="file" id="csvFileInput" accept=".csv" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
         <button onclick="loadCSV()" style="margin-left: 10px; padding: 8px 16px; background: #4051b5; color: white; border: none; border-radius: 4px; cursor: pointer;">Load Data</button>
     </div>
 
+    <div id="reuseNotice" style="margin: 10px 0; font-size: 0.9em; color: var(--md-default-fg-color--light); display: none;"></div>
     <div id="fileInfo" style="margin: 10px 0; font-size: 0.9em; color: var(--md-default-fg-color--light);"></div>
 
-    <h3>Step 2: Enter System Voltage</h3>
+    <div id="columnMapping" style="margin: 10px 0; display: none;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-width: 620px;">
+            <div>
+                <label for="dtColSelect" style="display: block; margin-bottom: 5px; font-weight: 500;">Date/Time column:</label>
+                <select id="dtColSelect" style="width: 100%; padding: 8px;"></select>
+            </div>
+            <div>
+                <label for="currentColSelect" style="display: block; margin-bottom: 5px; font-weight: 500;">Current (A) column:</label>
+                <select id="currentColSelect" style="width: 100%; padding: 8px;"></select>
+            </div>
+        </div>
+    </div>
+
+    <h3>Step 2: Enter System Voltage &amp; Power Factor</h3>
 
     <div style="margin: 15px 0; padding: 15px; background: var(--md-default-bg-color); border-radius: 6px;">
         <p style="font-size: 0.9em; color: var(--md-default-fg-color--light); margin-bottom: 10px;">
-            Enter the 3-phase system voltage. Power will be calculated as: P = √3 × V × I
+            Enter the 3-phase system voltage and motor power factor. Real power is calculated as: P = √3 × V × I × PF
         </p>
-        <div style="max-width: 300px;">
-            <label for="systemVoltage" style="display: block; margin-bottom: 5px; font-weight: 500;">System Voltage (V):</label>
-            <input type="number" id="systemVoltage" placeholder="460" step="1" value="460" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
-            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Common values: 208V, 460V, 600V</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-width: 620px;">
+            <div>
+                <label for="systemVoltage" style="display: block; margin-bottom: 5px; font-weight: 500;">System Voltage (V):</label>
+                <input type="number" id="systemVoltage" placeholder="460" step="1" value="460" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Common values: 208V, 460V, 600V</p>
+            </div>
+            <div>
+                <label for="powerFactor" style="display: block; margin-bottom: 5px; font-weight: 500;">Power Factor:</label>
+                <input type="number" id="powerFactor" placeholder="0.90" step="0.01" min="0.5" max="1" value="0.90" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Loaded compressor motors: 0.85–0.95</p>
+            </div>
         </div>
     </div>
 
@@ -87,23 +109,23 @@
                 <div></div>
             </div>
             <div class="vfd-point" style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;">
-                <input type="number" class="vfd-power" placeholder="10" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
-                <input type="number" class="vfd-flow" placeholder="50" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" class="vfd-power" placeholder="10" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="number" class="vfd-flow" placeholder="50" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 <div></div>
             </div>
             <div class="vfd-point" style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;">
-                <input type="number" class="vfd-power" placeholder="40" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
-                <input type="number" class="vfd-flow" placeholder="250" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" class="vfd-power" placeholder="40" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="number" class="vfd-flow" placeholder="250" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 <div></div>
             </div>
             <div class="vfd-point" style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;">
-                <input type="number" class="vfd-power" placeholder="75" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
-                <input type="number" class="vfd-flow" placeholder="475" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" class="vfd-power" placeholder="75" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="number" class="vfd-flow" placeholder="475" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 <div></div>
             </div>
             <div class="vfd-point" style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;">
-                <input type="number" class="vfd-power" placeholder="95" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
-                <input type="number" class="vfd-flow" placeholder="600" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" class="vfd-power" placeholder="95" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="number" class="vfd-flow" placeholder="600" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 <button onclick="removeVFDPoint(this)" style="padding: 6px; background: #d32f2f; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>
             </div>
         </div>
@@ -115,29 +137,29 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 15px 0;">
             <div>
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Loaded Power (kW):</label>
-                <input type="number" id="loadedPower" placeholder="100" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" id="loadedPower" placeholder="100" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
             <div>
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Loaded Flow (CFM):</label>
-                <input type="number" id="loadedFlow" placeholder="500" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" id="loadedFlow" placeholder="500" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
             <div>
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Margin (% of loaded):</label>
-                <input type="number" id="loadedMargin" placeholder="10" step="1" min="0" max="20" value="10" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" id="loadedMargin" placeholder="10" step="1" min="0" max="20" value="10" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 15px 0;">
             <div>
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Unloaded Power (kW):</label>
-                <input type="number" id="unloadedPower" placeholder="25" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" id="unloadedPower" placeholder="25" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
             <div>
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Unloaded Flow (CFM):</label>
-                <input type="number" id="unloadedFlow" placeholder="0" step="0.1" value="0" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" id="unloadedFlow" placeholder="0" step="0.1" value="0" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
             <div>
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Margin (% of unloaded):</label>
-                <input type="number" id="unloadedMargin" placeholder="10" step="1" min="0" max="20" value="10" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="number" id="unloadedMargin" placeholder="10" step="1" min="0" max="20" value="10" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
         </div>
     </div>
@@ -151,11 +173,11 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
             <div>
                 <label for="startTime" style="display: block; margin-bottom: 5px; font-weight: 500;">Start DateTime:</label>
-                <input type="datetime-local" id="startTime" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="datetime-local" id="startTime" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
             <div>
                 <label for="endTime" style="display: block; margin-bottom: 5px; font-weight: 500;">End DateTime:</label>
-                <input type="datetime-local" id="endTime" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; color: black;">
+                <input type="datetime-local" id="endTime" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
         </div>
         <div id="periodInfo" style="margin-top: 10px; font-size: 0.9em; color: var(--md-default-fg-color--light);"></div>
@@ -183,6 +205,7 @@
 
   <script src="assets/js/site.js"></script>
   <script src="assets/js/extra.js"></script>
+  <script src="assets/js/power-profile.js"></script>
   <script src="assets/js/leak-rate.js"></script>
 </body>
 </html>
