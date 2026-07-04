@@ -244,30 +244,10 @@ function updatePeriodInfo() {
     }
 }
 
+// Linear interpolation lives in the shared PowerProfile engine so the leak-rate
+// and power-efficiency tools share one implementation.
 function linearInterpolate(x, xArray, yArray) {
-    // Find bracketing points
-    let lowerIdx = 0;
-    let upperIdx = xArray.length - 1;
-
-    // If x is outside range, use boundary values
-    if (x <= xArray[0]) return yArray[0];
-    if (x >= xArray[xArray.length - 1]) return yArray[yArray.length - 1];
-
-    // Find bracketing indices
-    for (let i = 0; i < xArray.length - 1; i++) {
-        if (x >= xArray[i] && x <= xArray[i + 1]) {
-            lowerIdx = i;
-            upperIdx = i + 1;
-            break;
-        }
-    }
-
-    const x0 = xArray[lowerIdx];
-    const x1 = xArray[upperIdx];
-    const y0 = yArray[lowerIdx];
-    const y1 = yArray[upperIdx];
-
-    return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
+    return window.PowerProfile.linearInterpolate(x, xArray, yArray);
 }
 
 function calculateLeakRate() {

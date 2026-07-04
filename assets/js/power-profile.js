@@ -235,6 +235,196 @@
     };
   }
 
+  // --- Interpolation ------------------------------------------------------
+
+  // 1-D linear interpolation of y at x given monotonic-ascending xArray and its
+  // paired yArray. Clamps to the endpoints outside the range. Shared by the flow
+  // lookup here and the leak-rate calculator.
+  function linearInterpolate(x, xArray, yArray) {
+    if (xArray.length === 0) return null;
+    if (x <= xArray[0]) return yArray[0];
+    if (x >= xArray[xArray.length - 1]) return yArray[yArray.length - 1];
+    let lo = 0;
+    let hi = xArray.length - 1;
+    for (let i = 0; i < xArray.length - 1; i++) {
+      if (x >= xArray[i] && x <= xArray[i + 1]) { lo = i; hi = i + 1; break; }
+    }
+    const x0 = xArray[lo], x1 = xArray[hi], y0 = yArray[lo], y1 = yArray[hi];
+    return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
+  }
+
+  // --- Day-type grouping --------------------------------------------------
+
+  // Average power for each weekday (0 = Sun .. 6 = Sat), across the whole
+  // series. Returns [7] with null where a weekday has no data.
+  function dailyMeanPower(series) {
+    const sum = new Array(7).fill(0);
+    const cnt = new Array(7).fill(0);
+    for (let i = 0; i < series.length; i++) {
+      const d = series[i].t.getDay();
+      sum[d] += series[i].kW;
+      cnt[d]++;
+    }
+    return sum.map(function (s, d) { return cnt[d] > 0 ? s / cnt[d] : null; });
+  }
+
+  // Auto-group the seven weekdays into "day type" buckets by daily average
+  // power. Days are visited high-to-low; a day joins the current cluster when
+  // its mean is within tolerancePct (%) of the running cluster mean, else it
+  // starts a new cluster. Clusters come out in descending-power order and are
+  // named Production (highest) .. Non-Production (lowest), with Type 3, Type 4…
+  // in between. A second (empty) bucket is always guaranteed so the user has
+  // somewhere to move days, and weekdays with no data land in Non-Production.
+  // Returns { assignment:[7 bucket index], buckets:[{ name, days:[], meanKw }] }.
+  function autoGroupDays(series, tolerancePct) {
+    const tol = (tolerancePct == null ? 10 : tolerancePct) / 100;
+    const means = dailyMeanPower(series);
+
+    const withData = [];
+    for (let d = 0; d < 7; d++) if (means[d] != null) withData.push(d);
+    withData.sort(function (a, b) { return means[b] - means[a]; });
+
+    const clusters = [];
+    withData.forEach(function (d) {
+      const cur = clusters[clusters.length - 1];
+      const cmean = cur ? cur.sum / cur.n : null;
+      if (cur && Math.abs(means[d] - cmean) <= tol * cmean) {
+        cur.days.push(d); cur.sum += means[d]; cur.n++;
+      } else {
+        clusters.push({ days: [d], sum: means[d], n: 1 });
+      }
+    });
+
+    const buckets = clusters.map(function (c) {
+      return { name: '', days: c.days.slice(), meanKw: c.sum / c.n };
+    });
+    while (buckets.length < 2) buckets.push({ name: '', days: [], meanKw: null });
+
+    const n = buckets.length;
+    buckets.forEach(function (b, i) {
+      b.name = i === 0 ? 'Production' : (i === n - 1 ? 'Non-Production' : 'Type ' + (i + 1));
+    });
+
+    // Weekdays without data -> Non-Production (last) bucket.
+    for (let d = 0; d < 7; d++) if (means[d] == null) buckets[n - 1].days.push(d);
+    buckets.forEach(function (b) { b.days.sort(function (a, c) { return a - c; }); });
+
+    const assignment = new Array(7).fill(n - 1);
+    buckets.forEach(function (b, i) {
+      b.days.forEach(function (d) { assignment[d] = i; });
+    });
+
+    return { assignment: assignment, buckets: buckets };
+  }
+
+  // Average hourly power [24] for each bucket, given a day->bucket assignment.
+  // Returns nBuckets rows of 24 values (null where a bucket has no data in that
+  // hour). Used for the per-day-type profile chart.
+  function bucketHourlyProfiles(series, assignment, nBuckets) {
+    const sum = [];
+    const cnt = [];
+    for (let b = 0; b < nBuckets; b++) {
+      sum.push(new Array(24).fill(0));
+      cnt.push(new Array(24).fill(0));
+    }
+    for (let i = 0; i < series.length; i++) {
+      const b = assignment[series[i].t.getDay()];
+      if (b == null || b < 0 || b >= nBuckets) continue;
+      const h = series[i].t.getHours();
+      sum[b][h] += series[i].kW;
+      cnt[b][h]++;
+    }
+    return sum.map(function (row, b) {
+      return row.map(function (v, h) { return cnt[b][h] > 0 ? v / cnt[b][h] : null; });
+    });
+  }
+
+  // --- Flow, threshold & isentropic efficiency ----------------------------
+
+  // Flow (CFM) for a given electrical power (kW). config is either
+  //   { type:'vfd', power:[asc], flow:[] }              -> interpolated, or
+  //   { type:'nonvfd', loadedThreshold, loadedFlow,
+  //                    unloadedThreshold, unloadedFlow } -> discrete state.
+  // power/flow for VFD must be sorted ascending by power. Returns null when the
+  // config is unusable.
+  function flowForPower(kw, config) {
+    if (!config) return null;
+    if (config.type === 'vfd') {
+      if (!config.power || config.power.length < 2) return null;
+      return linearInterpolate(kw, config.power, config.flow);
+    }
+    if (kw > config.loadedThreshold) return config.loadedFlow;
+    if (kw >= config.unloadedThreshold) return config.unloadedFlow;
+    return 0;
+  }
+
+  // Suggested average-power threshold: 50% of the lowest VFD performance point,
+  // or 50% of unloaded power for a load/unload machine. Below this a sample is
+  // treated as idle/off and excluded from average operating power and the
+  // efficiency lookup (but NOT from EFLH). Returns NaN when it can't be derived.
+  function suggestThreshold(config) {
+    if (!config) return NaN;
+    if (config.type === 'vfd') {
+      return config.power && config.power.length ? 0.5 * config.power[0] : NaN;
+    }
+    return config.unloadedPower > 0 ? 0.5 * config.unloadedPower : NaN;
+  }
+
+  // Mean power of samples at or above threshold -> { avgKw, nSamples }.
+  function averageOperatingPower(series, threshold) {
+    let sum = 0, n = 0;
+    for (let i = 0; i < series.length; i++) {
+      if (series[i].kW >= threshold) { sum += series[i].kW; n++; }
+    }
+    return { avgKw: n > 0 ? sum / n : 0, nSamples: n };
+  }
+
+  const EFF_GAMMA = 1.40287268;
+  const EFF_R_AIR = 0.28703905;
+  const EFF_P_ATM = 101.325;                 // kPa
+  const EFF_CFM_TO_KGS = 0.000472 * 1.225;
+
+  // Isentropic (adiabatic) compression efficiency from a single operating point.
+  //   opts: { cfm, kw, psi (gauge discharge), inletC (default 20) }
+  // Returns { efficiency (%), idealPower (kW), specificPower (kW/100cfm) } or
+  // null when inputs are non-positive.
+  function isentropicEfficiency(opts) {
+    const cfm = opts.cfm, kw = opts.kw, psi = opts.psi;
+    const inletC = opts.inletC == null ? 20 : opts.inletC;
+    if (!(cfm > 0) || !(kw > 0) || !(psi > 0)) return null;
+    const massFlow = cfm * EFF_CFM_TO_KGS;
+    const T1 = inletC + 273.15;
+    const P2 = psi * 6.894757 + EFF_P_ATM;   // gauge -> absolute
+    const exponent = (EFF_GAMMA - 1) / EFF_GAMMA;
+    const idealPower = (EFF_GAMMA * EFF_R_AIR * T1 / (EFF_GAMMA - 1)) *
+                       (Math.pow(P2 / EFF_P_ATM, exponent) - 1) * massFlow;
+    return {
+      efficiency: (idealPower / kw) * 100,
+      idealPower: idealPower,
+      specificPower: kw / (cfm / 100)
+    };
+  }
+
+  // Time-weighted average isentropic efficiency across all above-threshold
+  // samples: each qualifying sample's flow is looked up from config and its
+  // efficiency evaluated, then averaged. Samples are (near-)uniformly spaced so
+  // an equal-weight mean is the time-weighted mean. cond = { psi, inletC }.
+  // Returns { effPct, avgCfm, avgKw, nSamples } or null when nothing qualifies.
+  function timeWeightedEfficiency(series, config, threshold, cond) {
+    let effSum = 0, cfmSum = 0, kwSum = 0, n = 0;
+    for (let i = 0; i < series.length; i++) {
+      const kw = series[i].kW;
+      if (kw < threshold) continue;
+      const flow = flowForPower(kw, config);
+      if (!(flow > 0)) continue;
+      const eff = isentropicEfficiency({ cfm: flow, kw: kw, psi: cond.psi, inletC: cond.inletC });
+      if (!eff) continue;
+      effSum += eff.efficiency; cfmSum += flow; kwSum += kw; n++;
+    }
+    if (n === 0) return null;
+    return { effPct: effSum / n, avgCfm: cfmSum / n, avgKw: kwSum / n, nSamples: n };
+  }
+
   // --- UI helper ----------------------------------------------------------
 
   // Inline validation message markup (replaces alert()). Themed via CSS vars.
@@ -254,6 +444,15 @@
     histogram: histogram,
     weeklyProfile: weeklyProfile,
     eflh: eflh,
+    linearInterpolate: linearInterpolate,
+    dailyMeanPower: dailyMeanPower,
+    autoGroupDays: autoGroupDays,
+    bucketHourlyProfiles: bucketHourlyProfiles,
+    flowForPower: flowForPower,
+    suggestThreshold: suggestThreshold,
+    averageOperatingPower: averageOperatingPower,
+    isentropicEfficiency: isentropicEfficiency,
+    timeWeightedEfficiency: timeWeightedEfficiency,
     errorHTML: errorHTML
   };
 })();
