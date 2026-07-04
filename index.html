@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ITAC Tools — Industrial Assessment Calculators</title>
+  <meta name="description" content="Interactive energy-assessment calculators from the Southern New England Industrial Training and Assessment Center.">
+  <link rel="stylesheet" href="assets/theme.css">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("itac-tools-theme");
+        if (t) document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="bar">
+      <a class="brand" href="index.html">ITAC Tools</a>
+      <div class="spacer"></div>
+      <nav>
+        <a href="https://industrialassessment.com">Docs</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle dark mode">🌙</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1>Industrial Assessment Calculators</h1>
+    <p class="lead">Interactive tools for energy assessments — compressed-air leak
+      rates, heat recovery, cold-air intake savings, and VSD efficiency. Built by
+      the Southern New England Industrial Training and Assessment Center.</p>
+
+    <div class="card-grid">
+      <a class="tool-card" href="leak-rate.html">
+        <h3>Leak Rate Calculator</h3>
+        <p>Determine compressed-air leak rates from logged compressor power data.</p>
+      </a>
+      <a class="tool-card" href="cold-intake.html">
+        <h3>Cold Air Intake Calculator</h3>
+        <p>Estimate energy and cost savings from a cold outdoor-air intake system.</p>
+      </a>
+      <a class="tool-card" href="heat-recovery.html">
+        <h3>Heat Recovery Calculator</h3>
+        <p>Estimate fuel savings from recovering compressor waste heat.</p>
+      </a>
+      <a class="tool-card" href="vsd-efficiency.html">
+        <h3>VSD Isentropic Efficiency Estimator</h3>
+        <p>Back-calculate isentropic efficiency from measured specific-power data.</p>
+      </a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    &copy; Southern New England Industrial Training and Assessment Center
+  </footer>
+
+  <script src="assets/js/site.js"></script>
+</body>
+</html>
