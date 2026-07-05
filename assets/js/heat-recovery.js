@@ -26,15 +26,6 @@
 const HR_KW_PER_HP = 0.746;   // kW per horsepower
 const HR_BTU_PER_KWH = 3412;  // Btu per kWh
 
-// Recovery efficiency (RE) presets by compressor type. TRM default is 0.80;
-// these type-specific values reflect the recoverable fraction of input energy.
-const HR_RE_DEFAULTS = {
-    'rotary-screw':  0.85,
-    'oil-free':      0.89,
-    'reciprocating': 0.60,
-    'centrifugal':   0.85
-};
-
 // Fossil heating fuels. Electric heating is handled separately via COP.
 const HR_FUEL_DEFAULTS = {
     'natural-gas': { hoc: 1000000, cost: 15.00, efficiency: 85, unit: 'MMBtu', costLabel: '$/MMBtu for natural gas',   hocLabel: '1,000,000 Btu/MMBtu (by definition)' },
@@ -81,12 +72,6 @@ function hrFormatNumber(num, decimals = 0) {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals
     });
-}
-
-function hrUpdateRejectionFactor() {
-    const type = document.getElementById('compressorType').value;
-    document.getElementById('recoveryEfficiency').value = HR_RE_DEFAULTS[type];
-    hrCalculate();
 }
 
 // Populate the location <select>, grouped by state.
