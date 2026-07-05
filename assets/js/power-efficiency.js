@@ -377,20 +377,48 @@
     // are handled by the Cold Intake calculator.
     const config = getConfig();
     const psi = num('dischargePsi');
+    const zeroFlowKw = num('zeroFlowKw');
     const flowStats = PP().averageOperatingFlow(series, config, threshold);
-    const eff = PP().timeWeightedEfficiency(series, config, threshold, { psi: psi, inletC: 20 });
+    const eff = PP().timeWeightedEfficiency(series, config, threshold,
+      { psi: psi, inletC: 20, zeroFlowKw: zeroFlowKw });
 
+    // Subtracting the CAGI zero-flow power reports a shaft-side (net-of-parasitic)
+    // efficiency; without it the number is a wire-to-air efficiency.
+    const netEff = zeroFlowKw > 0;
+    const effLabel = 'Time-Weighted Isentropic Efficiency' + (netEff ? ' (net)' : '');
     let effTile;
     if (!(psi > 0)) {
-      effTile = tile('Time-Weighted Isentropic Efficiency', 'enter PSI', null);
+      effTile = tile(effLabel, 'enter PSI', null);
     } else if (config.type === 'vfd' && config.power.length < 2) {
-      effTile = tile('Time-Weighted Isentropic Efficiency', 'need VFD points', null);
+      effTile = tile(effLabel, 'need VFD points', null);
     } else if (!eff) {
-      effTile = tile('Time-Weighted Isentropic Efficiency', 'no data', null);
+      effTile = tile(effLabel, 'no data', null);
     } else {
       const c = eff.effPct > 100 ? '#db2955' : (eff.effPct < 50 ? '#ff7700' : '#20bf55');
-      effTile = tile('Time-Weighted Isentropic Efficiency', eff.effPct.toFixed(1) + '%', c);
+      effTile = tile(effLabel, eff.effPct.toFixed(1) + '%', c);
     }
+
+    // Non-fatal data-quality warnings (short/gappy log, or a threshold that no
+    // longer excludes idle samples).
+    const warnings = [];
+    const cov = PP().coverage(series);
+    if (cov.spanDays < 7 || cov.nDaysWithData < 7) {
+      const missing = DAY_NAMES.filter(function (_, d) { return !cov.daysWithData[d]; });
+      warnings.push('Log spans only ' + cov.spanDays.toFixed(1) + ' day(s)' +
+        (missing.length ? ', with no data for ' + missing.join(', ') : '') +
+        '. EFLH and annual energy build a representative week, so days/hours with ' +
+        'no data count as zero energy and annual totals may be under-reported.');
+    }
+    const thrEl = document.getElementById('avgThreshold');
+    if (!thrEl || thrEl.value.trim() === '' || !(parseFloat(thrEl.value) > 0)) {
+      warnings.push('The average-power threshold is blank or ≤ 0, so idle/off samples ' +
+        'are included in average operating power, flow, and efficiency — pulling them down.');
+    }
+    const warnHtml = warnings.length
+      ? '<div style="margin: 0 0 14px 0; padding: 10px 12px; border-radius: 6px; ' +
+        'background: rgba(255,119,0,0.10); color: var(--color-orange, #ff7700); font-size: 0.9em;">' +
+        '⚠ ' + warnings.join('<br>⚠ ') + '</div>'
+      : '';
 
     // Per-bucket EFLH share + average power.
     let bucketRows = '';
@@ -411,6 +439,7 @@
     });
 
     document.getElementById('resultsContent').innerHTML =
+      warnHtml +
       '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; text-align: center; margin-bottom: 16px;">' +
         tile('Equivalent Full-Load Hours', r.eflh.toFixed(0) + ' hr/yr', '#20bf55') +
         tile('Avg Operating Power', avg.avgKw.toFixed(1) + ' kW', null) +
@@ -436,7 +465,12 @@
       '<p style="margin: 8px 0 0 0; font-size: 0.85em; color: var(--md-default-fg-color--light);">' +
         'EFLH and annual energy use <strong>all</strong> days (runtime on non-production days still counts). ' +
         'Average operating power, average flow, and the time-weighted efficiency use only samples at or above ' +
-        'the threshold, so idle/off periods don\'t drag them down.</p>';
+        'the threshold, so idle/off periods don\'t drag them down. ' +
+        'Average specific power is the aggregate kW ÷ (CFM ÷ 100), so it reconciles with the average flow and power above. ' +
+        (netEff
+          ? 'Efficiency is <strong>net of the zero-flow package power</strong> (a shaft-side estimate).'
+          : 'Efficiency is a <strong>wire-to-air</strong> figure (against total electrical input); enter the CAGI zero-flow power to net out parasitic losses.') +
+        '</p>';
 
     document.getElementById('results').style.display = 'block';
     renderSpecificPowerChart(config, flowStats);

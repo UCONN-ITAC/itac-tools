@@ -235,6 +235,22 @@
     };
   }
 
+  // Data-coverage summary, for warning when the representative week is built from
+  // less than a full week. The EFLH/energy method zeroes any (day, hour) cell
+  // with no data, so a short or gappy log silently under-reports annual totals.
+  // Returns { spanDays, daysWithData:[bool x7 Sun..Sat], nDaysWithData }.
+  function coverage(series) {
+    const means = dailyMeanPower(series);
+    const daysWithData = means.map(function (m) { return m != null; });
+    const spanDays = series.length > 1
+      ? (series[series.length - 1].t - series[0].t) / 86400000 : 0;
+    return {
+      spanDays: spanDays,
+      daysWithData: daysWithData,
+      nDaysWithData: daysWithData.filter(Boolean).length
+    };
+  }
+
   // --- Interpolation ------------------------------------------------------
 
   // 1-D linear interpolation of y at x given monotonic-ascending xArray and its
@@ -382,10 +398,14 @@
   // Time-weighted average flow and specific power (kW per 100 CFM) across the
   // above-threshold samples, using the flow lookup only — no discharge pressure
   // needed, so this is available whenever a usable control-type config exists.
-  // flowP10/flowP90 bound the band the machine "tends to operate" in. Returns
-  // { avgCfm, avgKw, specPower, flowP10, flowP90, nSamples } or null.
+  // specPower is the aggregate (ratio-of-means) specific power — total energy /
+  // total volume — so it reconciles with the reported avgKw and avgCfm
+  // (specPower === avgKw / (avgCfm/100)) rather than being a separate mean of
+  // per-sample ratios. flowP10/flowP90 bound the band the machine "tends to
+  // operate" in. Returns { avgCfm, avgKw, specPower, flowP10, flowP90, nSamples }
+  // or null.
   function averageOperatingFlow(series, config, threshold) {
-    let cfmSum = 0, kwSum = 0, specSum = 0, n = 0;
+    let cfmSum = 0, kwSum = 0, n = 0;
     const flows = [];
     for (let i = 0; i < series.length; i++) {
       const kw = series[i].kW;
@@ -393,7 +413,7 @@
       const flow = flowForPower(kw, config);
       if (!(flow > 0)) continue;
       flows.push(flow);
-      cfmSum += flow; kwSum += kw; specSum += kw / (flow / 100); n++;
+      cfmSum += flow; kwSum += kw; n++;
     }
     if (n === 0) return null;
     flows.sort(function (a, b) { return a - b; });
@@ -402,7 +422,8 @@
       return flows[idx];
     }
     return {
-      avgCfm: cfmSum / n, avgKw: kwSum / n, specPower: specSum / n,
+      avgCfm: cfmSum / n, avgKw: kwSum / n,
+      specPower: cfmSum > 0 ? kwSum / (cfmSum / 100) : 0,
       flowP10: pct(10), flowP90: pct(90), nSamples: n
     };
   }
@@ -435,27 +456,42 @@
     return { cfm: cfm, specPower: specPower };
   }
 
-  const EFF_GAMMA = 1.40287268;
-  const EFF_R_AIR = 0.28703905;
+  const EFF_GAMMA = 1.4;                      // dry air, standard ratio of specific heats
+  const EFF_R_AIR = 0.28703905;              // specific gas constant, kJ/(kg·K); cp = γR/(γ-1) ≈ 1.005
   const EFF_P_ATM = 101.325;                 // kPa
-  const EFF_CFM_TO_KGS = 0.000472 * 1.225;
+  const EFF_CFM_TO_M3S = 0.00047194745;      // 1 ft³/min in m³/s (mass flow multiplies by ρ(T1) below)
 
   // Isentropic (adiabatic) compression efficiency from a single operating point.
-  //   opts: { cfm, kw, psi (gauge discharge), inletC (default 20) }
+  //   opts: { cfm, kw, psi (gauge discharge), inletC (default 20), zeroFlowKw? }
+  // Air is treated as a single CT current representative of a balanced 3-phase
+  // load, and the reference is a single-stage adiabatic ideal (the conventional
+  // screening basis; a multi-stage intercooled machine's true ideal is lower).
+  // Inlet air density is evaluated at inletC so the mass flow is consistent with
+  // the temperature used in the compression work.
+  // When zeroFlowKw (CAGI "package input power at zero flow") is supplied, it is
+  // subtracted from the measured power so the denominator approximates the power
+  // actually going into compression — netting out fixed motor/drive/parasitic
+  // losses and shifting the result from a wire-to-air number toward a shaft-side
+  // isentropic efficiency. A sample drawing at or below the zero-flow power is
+  // doing no useful compression and returns null (skipped by callers).
   // Returns { efficiency (%), idealPower (kW), specificPower (kW/100cfm) } or
   // null when inputs are non-positive.
   function isentropicEfficiency(opts) {
     const cfm = opts.cfm, kw = opts.kw, psi = opts.psi;
     const inletC = opts.inletC == null ? 20 : opts.inletC;
     if (!(cfm > 0) || !(kw > 0) || !(psi > 0)) return null;
-    const massFlow = cfm * EFF_CFM_TO_KGS;
+    const zeroFlow = opts.zeroFlowKw > 0 ? opts.zeroFlowKw : 0;
+    const denom = kw - zeroFlow;
+    if (!(denom > 0)) return null;
     const T1 = inletC + 273.15;
+    const rho = EFF_P_ATM / (EFF_R_AIR * T1);          // inlet air density, kg/m³
+    const massFlow = cfm * EFF_CFM_TO_M3S * rho;       // kg/s
     const P2 = psi * 6.894757 + EFF_P_ATM;   // gauge -> absolute
     const exponent = (EFF_GAMMA - 1) / EFF_GAMMA;
     const idealPower = (EFF_GAMMA * EFF_R_AIR * T1 / (EFF_GAMMA - 1)) *
                        (Math.pow(P2 / EFF_P_ATM, exponent) - 1) * massFlow;
     return {
-      efficiency: (idealPower / kw) * 100,
+      efficiency: (idealPower / denom) * 100,
       idealPower: idealPower,
       specificPower: kw / (cfm / 100)
     };
@@ -464,7 +500,7 @@
   // Time-weighted average isentropic efficiency across all above-threshold
   // samples: each qualifying sample's flow is looked up from config and its
   // efficiency evaluated, then averaged. Samples are (near-)uniformly spaced so
-  // an equal-weight mean is the time-weighted mean. cond = { psi, inletC }.
+  // an equal-weight mean is the time-weighted mean. cond = { psi, inletC, zeroFlowKw }.
   // Returns { effPct, avgCfm, avgKw, nSamples } or null when nothing qualifies.
   function timeWeightedEfficiency(series, config, threshold, cond) {
     let effSum = 0, cfmSum = 0, kwSum = 0, n = 0;
@@ -473,7 +509,7 @@
       if (kw < threshold) continue;
       const flow = flowForPower(kw, config);
       if (!(flow > 0)) continue;
-      const eff = isentropicEfficiency({ cfm: flow, kw: kw, psi: cond.psi, inletC: cond.inletC });
+      const eff = isentropicEfficiency({ cfm: flow, kw: kw, psi: cond.psi, inletC: cond.inletC, zeroFlowKw: cond.zeroFlowKw });
       if (!eff) continue;
       effSum += eff.efficiency; cfmSum += flow; kwSum += kw; n++;
     }
@@ -500,6 +536,7 @@
     histogram: histogram,
     weeklyProfile: weeklyProfile,
     eflh: eflh,
+    coverage: coverage,
     linearInterpolate: linearInterpolate,
     dailyMeanPower: dailyMeanPower,
     autoGroupDays: autoGroupDays,

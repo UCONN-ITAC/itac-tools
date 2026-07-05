@@ -99,6 +99,11 @@
                 <input type="number" id="dischargePsi" placeholder="125" step="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
                 <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Gauge, for efficiency</p>
             </div>
+            <div>
+                <label for="zeroFlowKw" style="display: block; margin-bottom: 5px; font-weight: 500;">Zero-Flow Power (kW):</label>
+                <input type="number" id="zeroFlowKw" placeholder="optional" step="0.1" min="0" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">CAGI package input at 0 flow; nets out parasitics for a shaft-side efficiency</p>
+            </div>
         </div>
     </div>
 
