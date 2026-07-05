@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Power Pattern Analyzer — ITAC Tools</title>
-  <meta name="description" content="Weekly power-pattern analysis and equivalent full-load hours (EFLH) from logged CT current data.">
+  <title>Power &amp; Efficiency Analyzer — ITAC Tools</title>
+  <meta name="description" content="Weekly power pattern, day-type grouping, EFLH, average power and time-weighted isentropic efficiency from logged CT current data.">
   <link rel="icon" href="assets/brand/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/theme.css">
   <script>
@@ -25,10 +25,9 @@
       </a>
       <nav>
         <a href="leak-rate.html">Leak Rate</a>
-        <a href="power-pattern.html" class="active">Power Pattern</a>
+        <a href="power-pattern.html" class="active">Power &amp; Efficiency</a>
         <a href="cold-intake.html">Cold Intake</a>
         <a href="heat-recovery.html">Heat Recovery</a>
-        <a href="vsd-efficiency.html">VSD Efficiency</a>
       </nav>
       <div class="spacer"></div>
       <button class="theme-toggle" aria-label="Toggle dark mode">🌙</button>
@@ -36,21 +35,21 @@
   </header>
 
   <main class="container">
-    <span class="eyebrow">Compressed air</span>
-    <h1>Power pattern analyzer</h1>
+    <h1>Power &amp; efficiency analyzer</h1>
 
     <p class="lead">Upload logged CT current data to visualize the weekly power
-      pattern, then compute average power and equivalent full-load hours (EFLH)
-      for the compressor. These feed the System Profile and Day Types sections
-      of a MEASUR setup.</p>
+      pattern, group the week into day types, and compute average power and
+      equivalent full-load hours (EFLH). With a VFD power–flow curve (or a
+      load/unload configuration) it also reports a time-weighted isentropic
+      efficiency — no more transcribing a single operating point by hand.</p>
 
-    <div id="power-pattern-calc" style="max-width: 1200px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: var(--md-code-bg-color);">
+    <div id="power-efficiency-calc" style="max-width: 1200px; margin: 20px auto; padding: 20px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 8px; background: var(--md-code-bg-color);">
 
     <h3>Step 1: Upload CSV File</h3>
 
     <div style="margin: 15px 0;">
-        <input type="file" id="csvFileInput" accept=".csv" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-        <button id="loadDataBtn" style="margin-left: 10px; padding: 8px 16px; background: #4051b5; color: white; border: none; border-radius: 4px; cursor: pointer;">Load Data</button>
+        <input type="file" id="csvFileInput" accept=".csv" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+        <button id="loadDataBtn" style="margin-left: 10px; padding: 8px 16px; background: var(--md-primary-fg-color); color: var(--color-white); border: none; border-radius: 4px; cursor: pointer;">Load Data</button>
     </div>
 
     <div id="reuseNotice" style="margin: 10px 0; font-size: 0.9em; color: var(--md-default-fg-color--light); display: none;"></div>
@@ -72,57 +71,167 @@
 
     <h3>Step 2: System Parameters</h3>
 
-    <div style="margin: 15px 0; padding: 15px; background: var(--md-default-bg-color); border-radius: 6px;">
+    <div style="margin: 15px 0; padding: 15px; background: var(--surface-sunken); border-radius: 6px;">
         <p style="font-size: 0.9em; color: var(--md-default-fg-color--light); margin-bottom: 10px;">
-            Real power is calculated as: P = √3 × V × I × PF
+            Real power is calculated as: P = √3 × V × I × PF. Discharge pressure is
+            used for the isentropic efficiency estimate. Inlet air is assumed to be
+            at the CAGI standard 20 °C — intake-temperature effects are handled by
+            the Cold Intake calculator.
         </p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
             <div>
                 <label for="systemVoltage" style="display: block; margin-bottom: 5px; font-weight: 500;">System Voltage (V):</label>
-                <input type="number" id="systemVoltage" placeholder="460" step="1" value="460" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="number" id="systemVoltage" placeholder="460" step="1" value="460" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
                 <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">208 · 240 · 480 · 600</p>
             </div>
             <div>
                 <label for="powerFactor" style="display: block; margin-bottom: 5px; font-weight: 500;">Power Factor:</label>
-                <input type="number" id="powerFactor" placeholder="0.90" step="0.01" min="0.5" max="1" value="0.90" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="number" id="powerFactor" placeholder="0.90" step="0.01" min="0.5" max="1" value="0.90" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
                 <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Typical 0.80–0.95</p>
             </div>
             <div>
                 <label for="nameplateKw" style="display: block; margin-bottom: 5px; font-weight: 500;">Nameplate Power (kW):</label>
-                <input type="number" id="nameplateKw" placeholder="75" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="number" id="nameplateKw" placeholder="75" step="0.1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
                 <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Full-load compressor kW</p>
+            </div>
+            <div>
+                <label for="dischargePsi" style="display: block; margin-bottom: 5px; font-weight: 500;">Discharge Pressure (PSI):</label>
+                <input type="number" id="dischargePsi" placeholder="125" step="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Gauge, for efficiency</p>
+            </div>
+            <div>
+                <label for="zeroFlowKw" style="display: block; margin-bottom: 5px; font-weight: 500;">Zero-Flow Power (kW):</label>
+                <input type="number" id="zeroFlowKw" placeholder="optional" step="0.1" min="0" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">CAGI package input at 0 flow; nets out parasitics for a shaft-side efficiency</p>
             </div>
         </div>
     </div>
 
-    <h3>Step 3: Weekly Power Pattern</h3>
+    <h3>Step 3: Control Type &amp; Performance Data</h3>
 
-    <div id="weeklyHeatmap" style="margin: 20px 0; height: 360px; display: none;"></div>
-    <div id="hourlyProfile" style="margin: 20px 0; height: 320px; display: none;"></div>
+    <div style="margin: 15px 0;">
+        <label style="display: block; margin-bottom: 10px; font-weight: 500;">
+            <input type="radio" name="controlType" value="vfd" checked> VFD Compressor
+            <input type="radio" name="controlType" value="nonvfd" style="margin-left: 20px;"> Non-VFD Compressor
+        </label>
+    </div>
 
-    <h3>Step 4: Operating Days</h3>
-
-    <div style="margin: 15px 0; padding: 15px; background: var(--md-default-bg-color); border-radius: 6px;">
+    <div id="vfdConfig" style="margin: 20px 0; padding: 15px; background: var(--surface-sunken); border-radius: 6px;">
+        <h4 style="margin-top: 0;">VFD Configuration: Power–Flow Data Points</h4>
         <p style="font-size: 0.9em; color: var(--md-default-fg-color--light); margin-bottom: 10px;">
-            Select the days that represent normal operation. Weeks/year scales the
-            representative week to an annual estimate.
+            Enter at least 4 power–flow data points from the CAGI datasheet. These
+            map measured power to flow at each timestep. Click "Add Point" for more rows.
         </p>
-        <div id="operatingDays" style="display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;"></div>
-        <div style="max-width: 200px;">
-            <label for="weeksPerYear" style="display: block; margin-bottom: 5px; font-weight: 500;">Weeks per year:</label>
-            <input type="number" id="weeksPerYear" step="1" min="1" max="52" value="52" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+        <div id="vfdPointsContainer" style="margin: 10px 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px; font-weight: 500;">
+                <div>Power (kW)</div>
+                <div>Flow (CFM)</div>
+                <div></div>
+            </div>
+            <div class="vfd-point" style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;">
+                <input type="number" class="vfd-power" placeholder="10" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <input type="number" class="vfd-flow" placeholder="50" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <div></div>
+            </div>
+            <div class="vfd-point" style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;">
+                <input type="number" class="vfd-power" placeholder="40" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <input type="number" class="vfd-flow" placeholder="250" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <div></div>
+            </div>
+            <div class="vfd-point" style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;">
+                <input type="number" class="vfd-power" placeholder="75" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <input type="number" class="vfd-flow" placeholder="475" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <div></div>
+            </div>
+            <div class="vfd-point" style="display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;">
+                <input type="number" class="vfd-power" placeholder="95" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <input type="number" class="vfd-flow" placeholder="600" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+                <button type="button" class="vfd-remove" style="padding: 6px; background: var(--color-crimson); color: var(--color-white); border: none; border-radius: 4px; cursor: pointer;">✕</button>
+            </div>
+        </div>
+        <button type="button" id="addVfdPointBtn" style="padding: 8px 16px; background: var(--color-green); color: var(--color-white); border: none; border-radius: 4px; cursor: pointer;">+ Add Point</button>
+    </div>
+
+    <div id="nonvfdConfig" style="margin: 20px 0; padding: 15px; background: var(--surface-sunken); border-radius: 6px; display: none;">
+        <h4 style="margin-top: 0;">Non-VFD Configuration: Operating States</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 15px 0;">
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Loaded Power (kW):</label>
+                <input type="number" id="loadedPower" placeholder="100" step="0.1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Loaded Flow (CFM):</label>
+                <input type="number" id="loadedFlow" placeholder="500" step="0.1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Margin (% of loaded):</label>
+                <input type="number" id="loadedMargin" placeholder="10" step="1" min="0" max="20" value="10" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 15px 0;">
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Unloaded Power (kW):</label>
+                <input type="number" id="unloadedPower" placeholder="25" step="0.1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Unloaded Flow (CFM):</label>
+                <input type="number" id="unloadedFlow" placeholder="0" step="0.1" value="0" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Margin (% of unloaded):</label>
+                <input type="number" id="unloadedMargin" placeholder="10" step="1" min="0" max="20" value="10" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+            </div>
         </div>
     </div>
 
-    <h3>Step 5: Results</h3>
+    <h3>Step 4: Average-Power Threshold</h3>
 
-    <div style="margin: 20px 0;">
-        <button id="calcBtn" style="padding: 12px 24px; background: #4051b5; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1.1em; font-weight: 500;">Compute EFLH &amp; Average Power</button>
+    <div style="margin: 15px 0; padding: 15px; background: var(--surface-sunken); border-radius: 6px;">
+        <p style="font-size: 0.9em; color: var(--md-default-fg-color--light); margin-bottom: 10px;">
+            Samples below this power are treated as idle/off and excluded from
+            average operating power and the efficiency lookup (EFLH still counts
+            all runtime). Auto-set to 50% of the lowest VFD point, or 50% of
+            unloaded power. Edit to override.
+        </p>
+        <div style="max-width: 240px;">
+            <label for="avgThreshold" style="display: block; margin-bottom: 5px; font-weight: 500;">Threshold (kW):</label>
+            <input type="number" id="avgThreshold" step="0.1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+        </div>
     </div>
 
-    <div id="results" style="margin: 20px 0; padding: 20px; background: var(--md-default-bg-color); border-radius: 6px; display: none;">
-        <h3 style="margin-top: 0; color: #4caf50;">Results</h3>
+    <h3>Step 5: Weekly Power Pattern</h3>
+
+    <div id="weeklyHeatmap" style="margin: 20px 0; height: 360px; display: none;"></div>
+
+    <h3>Step 6: Day Types</h3>
+
+    <div style="margin: 15px 0; padding: 15px; background: var(--surface-sunken); border-radius: 6px;">
+        <p style="font-size: 0.9em; color: var(--md-default-fg-color--light); margin-bottom: 12px;">
+            Days are auto-grouped into buckets by their average power profile
+            (within ~10% ⇒ same bucket). Rename a bucket, reassign a day, add a
+            bucket, or re-run the auto-grouping. Each bucket gets its own profile
+            below; EFLH and average power are still computed across all days.
+        </p>
+        <div id="dayTypeUI"></div>
+    </div>
+
+    <div id="bucketProfiles" style="margin: 20px 0; height: 340px; display: none;"></div>
+
+    <h3>Step 7: Results</h3>
+
+    <div style="margin: 15px 0; max-width: 200px;">
+        <label for="weeksPerYear" style="display: block; margin-bottom: 5px; font-weight: 500;">Weeks per year:</label>
+        <input type="number" id="weeksPerYear" step="1" min="1" max="52" value="52" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+    </div>
+
+    <div style="margin: 20px 0;">
+        <button id="calcBtn" style="padding: 12px 24px; background: var(--md-primary-fg-color); color: var(--color-white); border: none; border-radius: 4px; cursor: pointer; font-size: 1.1em; font-weight: 500;">Compute EFLH, Power &amp; Efficiency</button>
+    </div>
+
+    <div id="results" style="margin: 20px 0; padding: 20px; background: var(--surface-sunken); border-radius: 6px; display: none;">
+        <h3 style="margin-top: 0; color: var(--color-green);">Results</h3>
         <div id="resultsContent"></div>
+        <div id="specPowerChart" style="margin: 20px 0 0; height: 360px; display: none;"></div>
     </div>
 
     </div>
@@ -135,6 +244,6 @@
   <script src="assets/js/site.js"></script>
   <script src="assets/js/extra.js"></script>
   <script src="assets/js/power-profile.js"></script>
-  <script src="assets/js/power-pattern.js"></script>
+  <script src="assets/js/power-efficiency.js"></script>
 </body>
 </html>

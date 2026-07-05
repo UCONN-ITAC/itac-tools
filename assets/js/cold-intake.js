@@ -27,7 +27,7 @@ function addCompressor(cfm = '', psi = '', eff = '', hours = '') {
     card.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <strong>Compressor ${id}</strong>
-            <button onclick="removeCompressor(${id})" style="padding: 4px 10px; background: none; border: 1px solid #f44336; border-radius: 4px; cursor: pointer; color: #f44336; font-size: 0.85em;">Remove</button>
+            <button onclick="removeCompressor(${id})" style="padding: 4px 10px; background: none; border: 1px solid #db2955; border-radius: 4px; cursor: pointer; color: #db2955; font-size: 0.85em;">Remove</button>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px;">
             <div>
@@ -228,17 +228,17 @@ function calculate() {
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center;">
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Energy Savings</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;">${formatNumber(grandTotalEnergySavings)} kWh</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #4caf50;">$${formatNumber(energyCost)}</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #20bf55;">${formatNumber(grandTotalEnergySavings)} kWh</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #20bf55;">$${formatNumber(energyCost)}</p>
                 </div>
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Demand Savings</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;">${formatNumber(grandTotalDeltaKW, 1)} kW-mo</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #4caf50;">$${formatNumber(demandCost)}</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #20bf55;">${formatNumber(grandTotalDeltaKW, 1)} kW-mo</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #20bf55;">$${formatNumber(demandCost)}</p>
                 </div>
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Total Annual Savings</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;">$${formatNumber(totalCost)}</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #20bf55;">$${formatNumber(totalCost)}</p>
                 </div>
             </div>
         </div>
@@ -248,17 +248,17 @@ function calculate() {
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center;">
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Energy Savings</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #2196f3;">${formatNumber(grandTotalEnergySavingsDamper)} kWh</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #2196f3;">$${formatNumber(energyCostDamper)}</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #00a6fb;">${formatNumber(grandTotalEnergySavingsDamper)} kWh</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #00a6fb;">$${formatNumber(energyCostDamper)}</p>
                 </div>
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Demand Savings</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #2196f3;">${formatNumber(grandTotalDeltaKWDamper, 1)} kW-mo</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #2196f3;">$${formatNumber(demandCostDamper)}</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #00a6fb;">${formatNumber(grandTotalDeltaKWDamper, 1)} kW-mo</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #00a6fb;">$${formatNumber(demandCostDamper)}</p>
                 </div>
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Total Annual Savings</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #2196f3;">$${formatNumber(totalCostDamper)}</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #00a6fb;">$${formatNumber(totalCostDamper)}</p>
                 </div>
             </div>
         </div>
@@ -268,15 +268,15 @@ function calculate() {
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center;">
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Energy Improvement</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #ff9800;">${formatNumber(marginalEnergy)} kWh</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #ff7700;">${formatNumber(marginalEnergy)} kWh</p>
                 </div>
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Demand Improvement</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #ff9800;">${formatNumber(marginalDemand, 1)} kW-mo</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #ff7700;">${formatNumber(marginalDemand, 1)} kW-mo</p>
                 </div>
                 <div>
                     <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Additional Annual Savings</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #ff9800;">$${formatNumber(marginalCost)}</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #ff7700;">$${formatNumber(marginalCost)}</p>
                 </div>
             </div>
             <p style="margin: 10px 0 0 0; font-size: 0.85em; color: var(--md-default-fg-color--light); text-align: center;">The smart damper avoids energy penalties in months where outdoor air is warmer than indoor air.</p>
@@ -303,7 +303,7 @@ function renderPowerChart(monthlyData) {
             x: months, y: basePowers,
             name: 'Current (Indoor Air)',
             type: 'scatter', mode: 'lines+markers',
-            line: { color: '#f44336', width: 2 },
+            line: { color: '#db2955', width: 2 },
             marker: { size: 6 }
         };
 
@@ -311,7 +311,7 @@ function renderPowerChart(monthlyData) {
             x: months, y: noDamperPowers,
             name: 'Without Smart Damper',
             type: 'scatter', mode: 'lines+markers',
-            line: { color: '#4caf50', width: 2 },
+            line: { color: '#20bf55', width: 2 },
             marker: { size: 6 }
         };
 
@@ -319,7 +319,7 @@ function renderPowerChart(monthlyData) {
             x: months, y: damperPowers,
             name: 'With Smart Damper',
             type: 'scatter', mode: 'lines+markers',
-            line: { color: '#2196f3', width: 2 },
+            line: { color: '#00a6fb', width: 2 },
             marker: { size: 6 }
         };
 
