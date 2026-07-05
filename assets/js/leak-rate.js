@@ -62,9 +62,9 @@ function addVFDPoint() {
     newPoint.className = 'vfd-point';
     newPoint.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;';
     newPoint.innerHTML = `
-        <input type="number" class="vfd-power" placeholder="kW" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-        <input type="number" class="vfd-flow" placeholder="CFM" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-        <button onclick="removeVFDPoint(this)" style="padding: 6px; background: #d32f2f; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>
+        <input type="number" class="vfd-power" placeholder="kW" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+        <input type="number" class="vfd-flow" placeholder="CFM" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
+        <button onclick="removeVFDPoint(this)" style="padding: 6px; background: #db2955; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>
     `;
     container.appendChild(newPoint);
 }
@@ -183,7 +183,7 @@ function updatePowerHistogram() {
         type: 'histogram',
         nbinsx: 50,
         marker: {
-            color: '#4051b5',
+            color: '#013ecd',
             line: {
                 color: '#ffffff',
                 width: 1
@@ -434,7 +434,7 @@ function displayResults(results, periodData, dateTimeCol, voltage) {
     const timestep = window.PowerProfile.detectTimestepMinutes(buildSeries());
     let html = `
         <div style="margin-bottom: 20px;">
-            <h4 style="color: #4caf50; margin-bottom: 10px;">Leak Rate: ${results.leakRate.toFixed(1)} CFM</h4>
+            <h4 style="color: #20bf55; margin-bottom: 10px;">Leak Rate: ${results.leakRate.toFixed(1)} CFM</h4>
             <p style="margin: 5px 0;"><strong>Control Type:</strong> ${results.type}</p>
             <p style="margin: 5px 0;"><strong>System Voltage:</strong> ${voltage} V (3-phase) | <strong>Power Factor:</strong> ${getPowerFactor().toFixed(2)}</p>
             <p style="margin: 5px 0;"><strong>Data Points Analyzed:</strong> ${results.dataPoints}</p>
@@ -520,7 +520,7 @@ function plotPowerChart(periodData, dateTimeCol, results) {
         type: 'scatter',
         mode: 'lines',
         name: 'Compressor Power',
-        line: {color: '#4051b5', width: 2}
+        line: {color: '#013ecd', width: 2}
     }];
 
     if (results.type === 'VFD') {
@@ -531,7 +531,7 @@ function plotPowerChart(periodData, dateTimeCol, results) {
             type: 'scatter',
             mode: 'lines',
             name: 'Interpolated Flow',
-            line: {color: '#4caf50', width: 2},
+            line: {color: '#20bf55', width: 2},
             yaxis: 'y2'
         });
     }

@@ -13,7 +13,7 @@ Industrial Training and Assessment Center (ITAC)**, hosted at
 | `cold-intake.html` | Estimate energy/cost savings from a cold outdoor-air intake system. |
 | `heat-recovery.html` | Estimate fuel savings from recovering compressor waste heat. |
 
-`vsd-efficiency.html` is now a redirect to `power-pattern.html`, which absorbed the standalone VSD isentropic efficiency estimator.
+The standalone VSD isentropic efficiency estimator was absorbed into `power-pattern.html`.
 
 ## How it works
 

@@ -15,7 +15,9 @@
 // guarded by the page's root element, like the calculators it replaces.
 (function () {
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const BUCKET_COLORS = ['#013ecd', '#20bf55', '#f4a259', '#db2955', '#8a4fff', '#00a6fb', '#5c6b73'];
+  // Brand data-viz categorical order: cobalt → green → azure → crimson → orange,
+  // then neutral/tinted extras for additional buckets.
+  const BUCKET_COLORS = ['#013ecd', '#20bf55', '#00a6fb', '#db2955', '#ff7700', '#6b7385', '#3a6ad9'];
 
   let csvData = [];
   let headers = [];
@@ -74,9 +76,9 @@
     row.className = 'vfd-point';
     row.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; margin-bottom: 8px;';
     row.innerHTML =
-      '<input type="number" class="vfd-power" placeholder="kW" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">' +
-      '<input type="number" class="vfd-flow" placeholder="CFM" step="0.1" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">' +
-      '<button type="button" class="vfd-remove" style="padding: 6px; background: #d32f2f; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>';
+      '<input type="number" class="vfd-power" placeholder="kW" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">' +
+      '<input type="number" class="vfd-flow" placeholder="CFM" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">' +
+      '<button type="button" class="vfd-remove" style="padding: 6px; background: #db2955; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>';
     container.appendChild(row);
   }
 
@@ -219,11 +221,11 @@
       html += '<span style="display: inline-flex; align-items: center; gap: 6px;">' +
         '<span style="width: 12px; height: 12px; border-radius: 3px; background: ' + color(i) + ';"></span>' +
         '<input class="bucket-name" data-b="' + i + '" value="' + b.name.replace(/"/g, '&quot;') + '" ' +
-          'style="padding: 6px; border: 1px solid #ccc; border-radius: 4px; width: 130px;">' +
+          'style="padding: 6px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; width: 130px;">' +
         '<span style="font-size: 0.85em; color: var(--md-default-fg-color--light);">' + count + 'd</span></span>';
     });
-    html += '<button type="button" id="addBucketBtn" style="padding: 6px 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;">+ Add bucket</button>';
-    html += '<button type="button" id="autoGroupBtn" style="padding: 6px 12px; background: var(--md-primary-fg-color, #4051b5); color: white; border: none; border-radius: 4px; cursor: pointer;">Re-run auto-group</button>';
+    html += '<button type="button" id="addBucketBtn" style="padding: 6px 12px; background: #20bf55; color: white; border: none; border-radius: 4px; cursor: pointer;">+ Add bucket</button>';
+    html += '<button type="button" id="autoGroupBtn" style="padding: 6px 12px; background: var(--md-primary-fg-color, #013ecd); color: white; border: none; border-radius: 4px; cursor: pointer;">Re-run auto-group</button>';
     html += '</div>';
 
     html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">';
@@ -353,7 +355,7 @@
     } else if (!eff) {
       effTile = tile('Time-Weighted Efficiency', 'no data', null);
     } else {
-      const c = eff.effPct > 100 ? '#f44336' : (eff.effPct < 50 ? '#ff9800' : '#4caf50');
+      const c = eff.effPct > 100 ? '#db2955' : (eff.effPct < 50 ? '#ff7700' : '#20bf55');
       effTile = tile('Time-Weighted Efficiency', eff.effPct.toFixed(1) + '%', c);
     }
 
