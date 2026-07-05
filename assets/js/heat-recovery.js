@@ -1,54 +1,164 @@
-// Compressor Heat Recovery Calculator (calculators/heat-recovery.md).
+// Compressor Heat Recovery Calculator.
 //
-// Functions called from inline onclick= attributes (hrCalculate,
-// hrUpdateRejectionFactor, hrUpdateFuelDefaults, hrToggleLatex, hrCopyLatex,
-// hrToggleEquations, hrCopyEquations) MUST remain global, so this file is not
-// wrapped in an IIFE. Initialization runs via document$ on every page load.
+// Aligned with the NYS Joint Utilities "Compressed Air Heat Recovery" C&I
+// measure (Dec 12, 2025). Implements the TRM's two savings equations:
+//
+//   ΔkWh   = (hpcomp·LF·RE·hrs·0.746 / COPheating)·FElecHeat − (hpfan·0.746·hrs / Efffan)
+//   ΔMMBtu = (hpcomp·LF·RE·hrs·0.746 / Effheating)·FFuelHeat · 3412/1e6
+//
+// where the recovered electrical-equivalent heat is the compressor motor input
+// (brake power × load factor) times the recovery efficiency, the displaced
+// heating is divided by the efficiency/COP of the system it offsets, and the
+// distribution fan is always an electric penalty. Peak demand savings are N/A
+// per the measure and are not calculated.
+//
+// Coincident heating hours diverge from the TRM's NY-only lookup table: they are
+// computed as hours below a 63°F balance point within the operating schedule,
+// from 2014–2023 hourly climate normals (Open-Meteo/ERA5), for representative
+// cities across NY, NJ, and New England. The 63°F balance point is calibrated to
+// reproduce the TRM's New York City continuous value (5,552 hrs). Values are
+// overridable ("from application").
+//
+// Functions called from inline onclick=/onchange= attributes MUST remain global,
+// so this file is not wrapped in an IIFE. Initialization runs via document$.
 
-// Constants
-const HR_BTU_PER_HP = 2545;
-const HR_BTU_PER_KW = 3412;
+// Conversion constants
+const HR_KW_PER_HP = 0.746;   // kW per horsepower
+const HR_BTU_PER_KWH = 3412;  // Btu per kWh
 
-const HR_FUEL_DEFAULTS = {
-    'natural-gas': { hoc: 1000000, cost: 15.00, efficiency: 85, unit: 'MMBtu', label: '$/MMBtu for natural gas',   hocLabel: '1,000,000 Btu/MMBtu (by definition)' },
-    'propane':     { hoc: 1000000, cost: 27.00, efficiency: 85, unit: 'MMBtu', label: '$/MMBtu for propane',       hocLabel: '1,000,000 Btu/MMBtu (by definition)' },
-    'fuel-oil':    { hoc: 1000000, cost: 25.00, efficiency: 83, unit: 'MMBtu', label: '$/MMBtu for No. 2 fuel oil', hocLabel: '1,000,000 Btu/MMBtu (by definition)' },
-    'electric':    { hoc: 3412,    cost: 0.12,  efficiency: 100, unit: 'kWh',  label: '$/kWh for electric resistance', hocLabel: '3,412 Btu/kWh' }
-};
-
-const HR_REJECTION_DEFAULTS = {
+// Recovery efficiency (RE) presets by compressor type. TRM default is 0.80;
+// these type-specific values reflect the recoverable fraction of input energy.
+const HR_RE_DEFAULTS = {
     'rotary-screw':  0.85,
     'oil-free':      0.89,
     'reciprocating': 0.60,
     'centrifugal':   0.85
 };
 
+// Fossil heating fuels. Electric heating is handled separately via COP.
+const HR_FUEL_DEFAULTS = {
+    'natural-gas': { hoc: 1000000, cost: 15.00, efficiency: 85, unit: 'MMBtu', costLabel: '$/MMBtu for natural gas',   hocLabel: '1,000,000 Btu/MMBtu (by definition)' },
+    'propane':     { hoc: 1000000, cost: 27.00, efficiency: 85, unit: 'MMBtu', costLabel: '$/MMBtu for propane',       hocLabel: '1,000,000 Btu/MMBtu (by definition)' },
+    'fuel-oil':    { hoc: 1000000, cost: 25.00, efficiency: 83, unit: 'MMBtu', costLabel: '$/MMBtu for No. 2 fuel oil', hocLabel: '1,000,000 Btu/MMBtu (by definition)' }
+};
+
+// Annual compressor hours coincident with heating demand, by location and
+// operating schedule. Computed from 2014–2023 hourly temperatures (hours below a
+// 63°F balance point within each schedule window). Schedule windows follow TRM
+// footnote 510: Single 7am–3pm M–F, Two 7am–11pm M–F, Three 24h M–F, Continuous
+// 24/7.
+const HR_HEATING_HOURS = {
+    "Albany": { state: "New York", single: 1378, two: 2656, three: 4308, cont: 6064 },
+    "Binghamton": { state: "New York", single: 1390, two: 2691, three: 4384, cont: 6182 },
+    "Buffalo": { state: "New York", single: 1395, two: 2725, three: 4379, cont: 6161 },
+    "Massena": { state: "New York", single: 1458, two: 2841, three: 4574, cont: 6417 },
+    "New York City": { state: "New York", single: 1271, two: 2479, three: 3961, cont: 5578 },
+    "Poughkeepsie": { state: "New York", single: 1328, two: 2576, three: 4166, cont: 5875 },
+    "Syracuse": { state: "New York", single: 1385, two: 2697, three: 4346, cont: 6114 },
+    "Newark": { state: "New Jersey", single: 1250, two: 2444, three: 3925, cont: 5531 },
+    "Atlantic City": { state: "New Jersey", single: 1171, two: 2320, three: 3708, cont: 5233 },
+    "Trenton": { state: "New Jersey", single: 1217, two: 2352, three: 3810, cont: 5376 },
+    "Hartford": { state: "Connecticut", single: 1319, two: 2583, three: 4185, cont: 5898 },
+    "Bridgeport": { state: "Connecticut", single: 1319, two: 2589, three: 4095, cont: 5765 },
+    "Providence": { state: "Rhode Island", single: 1319, two: 2628, three: 4227, cont: 5952 },
+    "Boston": { state: "Massachusetts", single: 1346, two: 2674, three: 4276, cont: 6019 },
+    "Worcester": { state: "Massachusetts", single: 1379, two: 2725, three: 4385, cont: 6175 },
+    "Pittsfield": { state: "Massachusetts", single: 1427, two: 2805, three: 4523, cont: 6378 },
+    "Burlington": { state: "Vermont", single: 1466, two: 2853, three: 4539, cont: 6368 },
+    "Rutland": { state: "Vermont", single: 1448, two: 2835, three: 4589, cont: 6455 },
+    "Concord": { state: "New Hampshire", single: 1406, two: 2761, three: 4471, cont: 6294 },
+    "Manchester": { state: "New Hampshire", single: 1389, two: 2734, three: 4416, cont: 6213 },
+    "Portland": { state: "Maine", single: 1455, two: 2918, three: 4613, cont: 6480 },
+    "Bangor": { state: "Maine", single: 1477, two: 2956, three: 4749, cont: 6678 },
+    "Caribou": { state: "Maine", single: 1610, two: 3165, three: 5066, cont: 7120 },
+};
+
+const HR_SCHEDULE_KEYS = { 'single': 'single', 'two': 'two', 'three': 'three', 'continuous': 'cont' };
+
+function hrFormatNumber(num, decimals = 0) {
+    if (!isFinite(num)) num = 0;
+    return num.toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
 function hrUpdateRejectionFactor() {
     const type = document.getElementById('compressorType').value;
-    document.getElementById('rejectionFactor').value = HR_REJECTION_DEFAULTS[type];
+    document.getElementById('recoveryEfficiency').value = HR_RE_DEFAULTS[type];
+    hrCalculate();
+}
+
+// Populate the location <select>, grouped by state.
+function hrPopulateLocations() {
+    const sel = document.getElementById('hrLocation');
+    if (!sel || sel.dataset.hrPopulated) return;
+    sel.dataset.hrPopulated = 'true';
+
+    const byState = {};
+    for (const [city, v] of Object.entries(HR_HEATING_HOURS)) {
+        (byState[v.state] = byState[v.state] || []).push(city);
+    }
+    const stateOrder = ['New York', 'New Jersey', 'Connecticut', 'Rhode Island',
+                        'Massachusetts', 'Vermont', 'New Hampshire', 'Maine'];
+    for (const state of stateOrder) {
+        const group = document.createElement('optgroup');
+        group.label = state;
+        for (const city of byState[state]) {
+            const opt = document.createElement('option');
+            opt.value = city;
+            opt.textContent = city;
+            group.appendChild(opt);
+        }
+        sel.appendChild(group);
+    }
+    sel.value = 'New York City';
+}
+
+// Recompute coincident heating hours from location + schedule and write them into
+// the (editable) hours field. Skipped when the schedule is "custom" so a manual
+// override survives.
+function hrUpdateHeatingHours() {
+    const schedule = document.getElementById('hrSchedule').value;
+    const hoursInput = document.getElementById('coincidentHours');
+    if (schedule === 'custom') {
+        hoursInput.readOnly = false;
+        hrCalculate();
+        return;
+    }
+    const location = document.getElementById('hrLocation').value;
+    const row = HR_HEATING_HOURS[location];
+    if (row) {
+        hoursInput.value = row[HR_SCHEDULE_KEYS[schedule]];
+    }
+    hoursInput.readOnly = true;
     hrCalculate();
 }
 
 function hrUpdateFuelDefaults() {
     const fuelType = document.getElementById('fuelType').value;
-    const defaults = HR_FUEL_DEFAULTS[fuelType];
-    document.getElementById('fuelHoC').value = defaults.hoc;
-    document.getElementById('fuelCost').value = defaults.cost;
-    document.getElementById('heatingEfficiency').value = defaults.efficiency;
-    document.getElementById('fuelCostLabel').textContent = defaults.label;
-    document.getElementById('fuelHoCLabel').textContent = defaults.hocLabel;
-
     const isElectric = fuelType === 'electric';
-    document.getElementById('demandRateSection').style.display = isElectric ? 'block' : 'none';
 
+    document.getElementById('hrFossilParams').style.display = isElectric ? 'none' : '';
+    document.getElementById('hrElectricParams').style.display = isElectric ? '' : 'none';
+
+    if (!isElectric) {
+        const defaults = HR_FUEL_DEFAULTS[fuelType];
+        document.getElementById('fuelHoC').value = defaults.hoc;
+        document.getElementById('fuelCost').value = defaults.cost;
+        document.getElementById('heatingEfficiency').value = defaults.efficiency;
+        document.getElementById('fuelCostLabel').textContent = defaults.costLabel;
+        document.getElementById('fuelHoCLabel').textContent = defaults.hocLabel;
+    }
     hrCalculate();
 }
 
-function hrFormatNumber(num, decimals = 0) {
-    return num.toLocaleString('en-US', {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals
-    });
+function hrUpdateHeatingCOP() {
+    const type = document.getElementById('elecHeatType').value;
+    if (type !== 'custom') {
+        document.getElementById('heatingCOP').value = type === 'heat-pump' ? '3.2' : '1.0';
+    }
+    hrCalculate();
 }
 
 let hrCalculationResults = null;
@@ -56,108 +166,155 @@ let hrCalculationResults = null;
 function hrCalculate() {
     const motorPower = parseFloat(document.getElementById('motorPower').value);
     const powerUnit = document.getElementById('powerUnit').value;
-    const rejectionFactor = parseFloat(document.getElementById('rejectionFactor').value);
-    const annualHours = parseFloat(document.getElementById('annualCompressorHours').value);
+    const loadFactor = parseFloat(document.getElementById('loadFactor').value);
+    const RE = parseFloat(document.getElementById('recoveryEfficiency').value);
+    const hrs = parseFloat(document.getElementById('coincidentHours').value);
     const fuelType = document.getElementById('fuelType').value;
-    const heatingEfficiency = parseFloat(document.getElementById('heatingEfficiency').value) / 100;
-    const fuelCost = parseFloat(document.getElementById('fuelCost').value);
-    const fuelHoC = parseFloat(document.getElementById('fuelHoC').value);
-    const heatingMonths = parseFloat(document.getElementById('heatingMonths').value);
+    const elecRate = parseFloat(document.getElementById('hrElecRate').value) || 0;
+    const fanHp = parseFloat(document.getElementById('fanHp').value) || 0;
+    const fanEff = parseFloat(document.getElementById('fanEff').value);
 
-    // Convert motor power to Btu/hr
-    let qInput;
-    if (powerUnit === 'hp') {
-        qInput = motorPower * HR_BTU_PER_HP;
-    } else {
-        qInput = motorPower * HR_BTU_PER_KW;
-    }
-
-    // Recoverable heat at full load (Btu/hr)
-    const qRecoverable = qInput * rejectionFactor;
-
-    // Heating season hours
-    const heatingHours = annualHours * (heatingMonths / 12);
-
-    // Total heat recovered during heating season (Btu)
-    const totalHeatRecovered = qRecoverable * heatingHours;
-
-    // Fuel displaced
-    const fuelUnit = HR_FUEL_DEFAULTS[fuelType].unit;
-    const fuelDisplaced = totalHeatRecovered / (fuelHoC * heatingEfficiency);
-
-    // Energy cost savings
-    const energyCostSavings = fuelDisplaced * fuelCost;
-
-    // Electric demand savings
     const isElectric = fuelType === 'electric';
-    let kwReduction = 0;
-    let kwMonths = 0;
-    let demandCostSavings = 0;
-    let totalCostSavings = energyCostSavings;
+
+    // Compressor motor input, as electrical-equivalent power (kW). Brake hp × 0.746.
+    const motorKW = powerUnit === 'hp' ? motorPower * HR_KW_PER_HP : motorPower;
+
+    // Recovered heat rate at average load (kW) and its Btu/hr equivalent.
+    const recoveredKW = motorKW * loadFactor * RE;
+    const recoveredHeatBtuHr = recoveredKW * HR_BTU_PER_KWH;
+
+    // Annual recovered heat (electrical-equivalent kWh, Btu, MMBtu).
+    const recoveredKWh = recoveredKW * hrs;
+    const recoveredBtu = recoveredKWh * HR_BTU_PER_KWH;
+    const recoveredMMBtu = recoveredBtu / 1e6;
+
+    // Distribution fan electric penalty (always electric): hpfan·0.746·hrs / Efffan.
+    const fanKWh = fanEff > 0 ? (fanHp * HR_KW_PER_HP * hrs) / fanEff : 0;
+    const fanCost = fanKWh * elecRate;
+
+    let fossilMMBtu = 0;
+    let fuelDisplaced = 0;      // in the fuel's own units
+    let fuelUnit = '';
+    let fuelSavings = 0;
+    let heatingKWh = 0;         // electric heating displaced (kWh)
+    let deltaKWh = -fanKWh;     // net electric energy savings (ΔkWh)
+    let heatingCOP = null;
+    let totalCostSavings = 0;
 
     if (isElectric) {
-        const demandRate = parseFloat(document.getElementById('hrDemandRate').value) || 0;
-        kwReduction = qRecoverable / (HR_BTU_PER_KW * heatingEfficiency);
-        kwMonths = kwReduction * heatingMonths;
-        demandCostSavings = kwMonths * demandRate;
-        totalCostSavings = energyCostSavings + demandCostSavings;
+        heatingCOP = parseFloat(document.getElementById('heatingCOP').value) || 1;
+        heatingKWh = recoveredKWh / heatingCOP;
+        deltaKWh = heatingKWh - fanKWh;
+        fuelDisplaced = heatingKWh;
+        fuelUnit = 'kWh';
+        totalCostSavings = deltaKWh * elecRate;
+    } else {
+        const heatingEfficiency = parseFloat(document.getElementById('heatingEfficiency').value) / 100;
+        const fuelCost = parseFloat(document.getElementById('fuelCost').value);
+        const fuelHoC = parseFloat(document.getElementById('fuelHoC').value);
+        fuelUnit = HR_FUEL_DEFAULTS[fuelType].unit;
+
+        // Fuel input displaced = useful heat delivered / heating efficiency.
+        const fuelInputBtu = recoveredBtu / heatingEfficiency;
+        fossilMMBtu = fuelInputBtu / 1e6;
+        fuelDisplaced = fuelInputBtu / fuelHoC;
+        fuelSavings = fuelDisplaced * fuelCost;
+        // Fan runs on electricity regardless of the displaced heating fuel.
+        totalCostSavings = fuelSavings - fanCost;
     }
 
     hrCalculationResults = {
-        qInput: qInput,
-        qRecoverable: qRecoverable,
-        heatingHours: heatingHours,
-        totalHeatRecovered: totalHeatRecovered,
-        fuelDisplaced: fuelDisplaced,
-        energyCostSavings: energyCostSavings,
-        kwReduction: kwReduction,
-        kwMonths: kwMonths,
-        demandCostSavings: demandCostSavings,
-        totalCostSavings: totalCostSavings,
-        fuelUnit: fuelUnit,
-        isElectric: isElectric
+        motorKW, recoveredKW, recoveredHeatBtuHr, hrs, recoveredKWh, recoveredMMBtu,
+        fanKWh, fanCost, isElectric, fossilMMBtu, fuelDisplaced, fuelUnit, fuelSavings,
+        heatingKWh, heatingCOP, deltaKWh, totalCostSavings
     };
 
-    // Update summary displays
-    document.getElementById('hrMotorPowerResult').textContent = `${hrFormatNumber(qInput)} Btu/hr`;
-    document.getElementById('hrRecoverableResult').textContent = `${hrFormatNumber(qRecoverable)} Btu/hr`;
-    document.getElementById('hrHeatingHoursResult').textContent = `${hrFormatNumber(heatingHours)} hrs`;
-    document.getElementById('hrAnnualHeatResult').textContent = `${hrFormatNumber(totalHeatRecovered / 1e6, 1)} MMBtu`;
-    document.getElementById('hrFuelDisplacedResult').textContent = `${hrFormatNumber(fuelDisplaced, 1)} ${fuelUnit}`;
-    document.getElementById('hrEnergyCostResult').textContent = `$${hrFormatNumber(energyCostSavings)}`;
-
-    // Electric demand results
-    if (isElectric) {
-        document.getElementById('hrDemandResultsRow').style.display = 'block';
-        document.getElementById('hrKwResult').textContent = `${hrFormatNumber(kwReduction, 1)} kW`;
-        document.getElementById('hrKwMonthsResult').textContent = `${hrFormatNumber(kwMonths, 1)} kW-mo`;
-        document.getElementById('hrDemandCostResult').textContent = `$${hrFormatNumber(demandCostSavings)}`;
-        document.getElementById('hrTotalCostResult').textContent = `$${hrFormatNumber(totalCostSavings)}`;
-    } else {
-        document.getElementById('hrDemandResultsRow').style.display = 'none';
-    }
-
-    // Update LaTeX
+    hrRenderResults();
     hrGenerateLatex();
+}
+
+function hrRenderResults() {
+    const r = hrCalculationResults;
+    if (!r) return;
+
+    document.getElementById('hrInputKwResult').textContent = `${hrFormatNumber(r.motorKW, 1)} kW`;
+    document.getElementById('hrRecoverableResult').textContent = `${hrFormatNumber(r.recoveredHeatBtuHr)} Btu/hr`;
+    document.getElementById('hrHeatingHoursResult').textContent = `${hrFormatNumber(r.hrs)} hrs`;
+
+    document.getElementById('hrAnnualHeatResult').textContent = `${hrFormatNumber(r.recoveredMMBtu, 1)} MMBtu`;
+
+    // Displaced-energy tile adapts to fuel type.
+    document.getElementById('hrDisplacedLabel').textContent = r.isElectric
+        ? 'Electric Heating Displaced' : 'Annual Fuel Displaced';
+    document.getElementById('hrFuelDisplacedResult').textContent = r.isElectric
+        ? `${hrFormatNumber(r.fuelDisplaced)} kWh`
+        : `${hrFormatNumber(r.fuelDisplaced, 1)} ${r.fuelUnit}`;
+
+    // Fan penalty tile.
+    document.getElementById('hrFanKwhResult').textContent = `−${hrFormatNumber(r.fanKWh)} kWh`;
+    document.getElementById('hrFanCostResult').textContent = `−$${hrFormatNumber(r.fanCost)}`;
+
+    // TRM output tiles: ΔkWh and ΔMMBtu.
+    const dk = document.getElementById('hrDeltaKwhResult');
+    dk.textContent = `${r.deltaKWh < 0 ? '−' : ''}${hrFormatNumber(Math.abs(r.deltaKWh))} kWh`;
+    dk.style.color = r.deltaKWh < 0 ? '#e5534b' : '#20bf55';
+    document.getElementById('hrDeltaMMBtuResult').textContent = `${hrFormatNumber(r.fossilMMBtu, 1)} MMBtu`;
+
+    // Net dollars.
+    const net = document.getElementById('hrNetSavingsResult');
+    net.textContent = `${r.totalCostSavings < 0 ? '−' : ''}$${hrFormatNumber(Math.abs(r.totalCostSavings))}`;
+    net.style.color = r.totalCostSavings < 0 ? '#e5534b' : '#20bf55';
 }
 
 function hrGenerateLatex() {
     if (!hrCalculationResults) return;
+    const r = hrCalculationResults;
 
     const motorPower = parseFloat(document.getElementById('motorPower').value);
     const powerUnit = document.getElementById('powerUnit').value;
-    const rejectionFactor = parseFloat(document.getElementById('rejectionFactor').value);
-    const annualHours = parseFloat(document.getElementById('annualCompressorHours').value);
-    const heatingEfficiency = parseFloat(document.getElementById('heatingEfficiency').value);
-    const heatingMonths = parseFloat(document.getElementById('heatingMonths').value);
-    const fuelCost = parseFloat(document.getElementById('fuelCost').value);
-
-    const { qInput, qRecoverable, heatingHours, totalHeatRecovered, fuelDisplaced, energyCostSavings,
-            isElectric, kwReduction, kwMonths, demandCostSavings, totalCostSavings, fuelUnit } = hrCalculationResults;
-
+    const loadFactor = parseFloat(document.getElementById('loadFactor').value);
+    const RE = parseFloat(document.getElementById('recoveryEfficiency').value);
+    const fanHp = parseFloat(document.getElementById('fanHp').value) || 0;
+    const fanEff = parseFloat(document.getElementById('fanEff').value);
     const unitLabel = powerUnit === 'hp' ? 'HP' : 'kW';
 
-    let latex = `\\begin{table}[htbp]
+    let rows = `Compressor Motor Power & ${hrFormatNumber(motorPower)} & ${unitLabel} \\\\
+Load Factor (LF) & ${loadFactor.toFixed(2)} & \\\\
+Recovery Efficiency (RE) & ${RE.toFixed(2)} & \\\\
+Compressor Input Power & ${hrFormatNumber(r.motorKW, 1)} & kW \\\\
+Recovered Heat (avg load) & ${hrFormatNumber(r.recoveredHeatBtuHr)} & Btu/hr \\\\
+Coincident Heating Hours & ${hrFormatNumber(r.hrs)} & hrs/yr \\\\
+Annual Heat Recovered & ${hrFormatNumber(r.recoveredMMBtu, 1)} & MMBtu/yr \\\\
+Distribution Fan Motor & ${hrFormatNumber(fanHp)} & hp \\\\
+Fan Motor Efficiency & ${fanEff.toFixed(3)} & \\\\
+\\midrule`;
+
+    if (r.isElectric) {
+        const elecRate = parseFloat(document.getElementById('hrElecRate').value) || 0;
+        rows += `
+Heating COP & ${r.heatingCOP.toFixed(2)} & \\\\
+Electric Heating Displaced & ${hrFormatNumber(r.heatingKWh)} & kWh/yr \\\\
+Fan Energy Penalty & ${hrFormatNumber(r.fanKWh)} & kWh/yr \\\\
+Net Electric Savings ($\\Delta$kWh) & ${hrFormatNumber(r.deltaKWh)} & kWh/yr \\\\
+Electricity Rate & \\$${elecRate.toFixed(3)} & /kWh \\\\
+\\midrule
+Net Annual Savings & \\$${hrFormatNumber(r.totalCostSavings)} & /yr \\\\`;
+    } else {
+        const heatingEfficiency = parseFloat(document.getElementById('heatingEfficiency').value);
+        const fuelCost = parseFloat(document.getElementById('fuelCost').value);
+        const elecRate = parseFloat(document.getElementById('hrElecRate').value) || 0;
+        rows += `
+Heating System Efficiency & ${heatingEfficiency}\\% & \\\\
+Fuel Displaced ($\\Delta$MMBtu) & ${hrFormatNumber(r.fuelDisplaced, 1)} & ${r.fuelUnit}/yr \\\\
+Fuel Cost & \\$${fuelCost.toFixed(2)} & /${r.fuelUnit} \\\\
+Fuel Cost Savings & \\$${hrFormatNumber(r.fuelSavings)} & /yr \\\\
+Fan Energy Penalty & ${hrFormatNumber(r.fanKWh)} & kWh/yr \\\\
+Fan Cost (@ \\$${elecRate.toFixed(3)}/kWh) & \\$${hrFormatNumber(r.fanCost)} & /yr \\\\
+\\midrule
+Net Annual Savings & \\$${hrFormatNumber(r.totalCostSavings)} & /yr \\\\`;
+    }
+
+    const latex = `\\begin{table}[htbp]
 \\centering
 \\caption{Compressor Heat Recovery Savings Analysis}
 \\label{tab:heat-recovery}
@@ -165,31 +322,7 @@ function hrGenerateLatex() {
 \\toprule
 Parameter & Value & Unit \\\\
 \\midrule
-Motor Power & ${hrFormatNumber(motorPower)} & ${unitLabel} \\\\
-Heat Input & ${hrFormatNumber(qInput)} & Btu/hr \\\\
-Heat Rejection Factor & ${rejectionFactor.toFixed(2)} & \\\\
-Recoverable Heat & ${hrFormatNumber(qRecoverable)} & Btu/hr \\\\
-Annual Operating Hours & ${hrFormatNumber(annualHours)} & hrs/yr \\\\
-Heating Months & ${hrFormatNumber(heatingMonths)} & months/yr \\\\
-Heating Season Hours & ${hrFormatNumber(heatingHours)} & hrs/yr \\\\
-Annual Heat Recovered & ${hrFormatNumber(totalHeatRecovered / 1e6, 2)} & MMBtu/yr \\\\
-Heating System Efficiency & ${heatingEfficiency}\\% & \\\\
-Fuel Displaced & ${hrFormatNumber(fuelDisplaced, 1)} & ${fuelUnit}/yr \\\\
-Fuel Cost & \\$${fuelCost.toFixed(2)} & /${fuelUnit} \\\\
-\\midrule
-Energy Cost Savings & \\$${hrFormatNumber(energyCostSavings)} & /yr \\\\`;
-
-    if (isElectric) {
-        const demandRate = parseFloat(document.getElementById('hrDemandRate').value) || 0;
-        latex += `
-Demand Reduction & ${hrFormatNumber(kwReduction, 1)} & kW \\\\
-Demand Savings & ${hrFormatNumber(kwMonths, 1)} & kW-months/yr \\\\
-Demand Cost Savings & \\$${hrFormatNumber(demandCostSavings)} & /yr \\\\
-\\midrule
-Total Annual Savings & \\$${hrFormatNumber(totalCostSavings)} & /yr \\\\`;
-    }
-
-    latex += `
+${rows}
 \\bottomrule
 \\end{tabular}
 \\end{table}`;
@@ -214,18 +347,7 @@ function hrToggleLatex() {
 }
 
 function hrCopyLatex() {
-    const latexCode = document.getElementById('hrLatexCode').textContent;
-    const btn = document.getElementById('hrCopyButton');
-
-    if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(latexCode).then(() => {
-            hrShowCopySuccess(btn);
-        }).catch(() => {
-            hrFallbackCopy(latexCode, btn);
-        });
-    } else {
-        hrFallbackCopy(latexCode, btn);
-    }
+    hrCopyText(document.getElementById('hrLatexCode').textContent, document.getElementById('hrCopyButton'));
 }
 
 function hrToggleEquations() {
@@ -250,22 +372,19 @@ function hrGenerateEquationsLatex() {
         document.getElementById('hrEquationsCode').textContent = 'Please run calculations first.';
         return;
     }
+    const r = hrCalculationResults;
 
     const motorPower = parseFloat(document.getElementById('motorPower').value);
     const powerUnit = document.getElementById('powerUnit').value;
-    const rejectionFactor = parseFloat(document.getElementById('rejectionFactor').value);
-    const heatingEfficiency = parseFloat(document.getElementById('heatingEfficiency').value) / 100;
-    const fuelCost = parseFloat(document.getElementById('fuelCost').value);
-    const fuelHoC = parseFloat(document.getElementById('fuelHoC').value);
-    const fuelType = document.getElementById('fuelType').value;
-    const annualHours = parseFloat(document.getElementById('annualCompressorHours').value);
-    const heatingMonths = parseFloat(document.getElementById('heatingMonths').value);
-
-    const { qInput, qRecoverable, heatingHours, totalHeatRecovered, fuelDisplaced,
-            energyCostSavings, isElectric, kwReduction, kwMonths, demandCostSavings, totalCostSavings, fuelUnit } = hrCalculationResults;
-
+    const loadFactor = parseFloat(document.getElementById('loadFactor').value);
+    const RE = parseFloat(document.getElementById('recoveryEfficiency').value);
+    const fanHp = parseFloat(document.getElementById('fanHp').value) || 0;
+    const fanEff = parseFloat(document.getElementById('fanEff').value);
+    const elecRate = parseFloat(document.getElementById('hrElecRate').value) || 0;
     const unitLabel = powerUnit === 'hp' ? 'HP' : 'kW';
-    const conversionLabel = powerUnit === 'hp' ? '2{,}545' : '3{,}412';
+    const powerToKW = powerUnit === 'hp'
+        ? `${motorPower} \\times 0.746 = ${hrFormatNumber(r.motorKW, 1)}`
+        : `${hrFormatNumber(r.motorKW, 1)}`;
 
     let latex = `\\section*{Compressor Heat Recovery Savings Calculation}
 
@@ -273,95 +392,81 @@ function hrGenerateEquationsLatex() {
 
 \\begin{itemize}
     \\item Compressor motor power: ${motorPower} ${unitLabel}
-    \\item Heat rejection factor: ${rejectionFactor}
-    \\item Annual compressor operating hours: ${hrFormatNumber(annualHours)} hours
-    \\item Heating months per year: ${heatingMonths}
-    \\item Heating fuel type: ${fuelType.replace(/-/g, ' ')}
-    \\item Heat of combustion: ${hrFormatNumber(fuelHoC)} Btu/${fuelUnit}
-    \\item Heating system efficiency: ${(heatingEfficiency * 100).toFixed(0)}\\%
-    \\item Fuel cost: \\$${fuelCost.toFixed(2)}/${fuelUnit}
+    \\item Load factor (LF): ${loadFactor}
+    \\item Recovery efficiency (RE): ${RE}
+    \\item Coincident heating hours: ${hrFormatNumber(r.hrs)} hrs/yr
+    \\item Distribution fan: ${fanHp} hp at ${fanEff} efficiency
 \\end{itemize}
 
-\\subsection*{Heat Input Calculation}
+\\subsection*{Recovered Heat}
 
-The total heat equivalent of the electrical input to the compressor is:
-
-\\begin{equation}
-Q_{\\text{input}} = P_{\\text{motor}} \\times ${conversionLabel} \\text{ Btu/hr per ${unitLabel}} = ${motorPower} \\times ${conversionLabel} = ${hrFormatNumber(qInput)} \\text{ Btu/hr}
-\\label{eq:heat-input}
-\\end{equation}
-
-\\subsection*{Recoverable Heat}
-
-The recoverable waste heat at full load is:
+The compressor input power and annual recovered heat (electrical equivalent) are:
 
 \\begin{equation}
-Q_{\\text{recoverable}} = Q_{\\text{input}} \\times f_{\\text{rejection}} = ${hrFormatNumber(qInput)} \\times ${rejectionFactor} = ${hrFormatNumber(qRecoverable)} \\text{ Btu/hr}
-\\label{eq:recoverable-heat}
+P_{\\text{comp}} = ${powerToKW} \\text{ kW}
 \\end{equation}
-
-\\subsection*{Heating Season}
-
-The compressor operating hours during the heating season are:
 
 \\begin{equation}
-H_{\\text{heating}} = H_{\\text{annual}} \\times \\frac{N_{\\text{heating}}}{12} = ${hrFormatNumber(annualHours)} \\times \\frac{${heatingMonths}}{12} = ${hrFormatNumber(heatingHours)} \\text{ hours}
-\\label{eq:heating-hours}
+Q_{\\text{rec}} = P_{\\text{comp}} \\times LF \\times RE \\times hrs = ${hrFormatNumber(r.motorKW, 1)} \\times ${loadFactor} \\times ${RE} \\times ${hrFormatNumber(r.hrs)} = ${hrFormatNumber(r.recoveredKWh)} \\text{ kWh}
+\\label{eq:recovered}
 \\end{equation}
 
-\\subsection*{Displaced Fuel}
+\\subsection*{Distribution Fan Penalty}
 
-The total heat recovered during the heating season is:
+The distribution fan is an electric load in all cases:
 
 \\begin{equation}
-Q_{\\text{annual}} = Q_{\\text{recoverable}} \\times H_{\\text{heating}} = ${hrFormatNumber(qRecoverable)} \\times ${hrFormatNumber(heatingHours)} = ${hrFormatNumber(totalHeatRecovered / 1e6, 2)} \\text{ MMBtu}
-\\label{eq:annual-heat}
-\\end{equation}
+\\Delta kWh_{\\text{fan}} = \\frac{hp_{\\text{fan}} \\times 0.746 \\times hrs}{Eff_{\\text{fan}}} = \\frac{${fanHp} \\times 0.746 \\times ${hrFormatNumber(r.hrs)}}{${fanEff}} = ${hrFormatNumber(r.fanKWh)} \\text{ kWh}
+\\label{eq:fan}
+\\end{equation}`;
 
-The displaced fuel quantity is:
+    if (r.isElectric) {
+        latex += `
+
+\\subsection*{Electric Heating Displaced}
+
+Recovered heat offsets electric heating with coefficient of performance $COP = ${r.heatingCOP}$:
 
 \\begin{equation}
-\\text{Fuel Displaced} = \\frac{Q_{\\text{annual}}}{H_c \\times \\eta_{\\text{heating}}} = \\frac{${hrFormatNumber(totalHeatRecovered)}}{${hrFormatNumber(fuelHoC)} \\times ${heatingEfficiency.toFixed(2)}} = ${hrFormatNumber(fuelDisplaced, 1)} \\text{ ${fuelUnit}}
-\\label{eq:fuel-displaced}
+kWh_{\\text{heat}} = \\frac{Q_{\\text{rec}}}{COP} = \\frac{${hrFormatNumber(r.recoveredKWh)}}{${r.heatingCOP}} = ${hrFormatNumber(r.heatingKWh)} \\text{ kWh}
+\\label{eq:elec-heat}
 \\end{equation}
 
-\\subsection*{Annual Savings}
+\\subsection*{Net Electric Savings}
+
+\\begin{equation}
+\\Delta kWh = kWh_{\\text{heat}} - \\Delta kWh_{\\text{fan}} = ${hrFormatNumber(r.heatingKWh)} - ${hrFormatNumber(r.fanKWh)} = ${hrFormatNumber(r.deltaKWh)} \\text{ kWh}
+\\label{eq:delta-kwh}
+\\end{equation}
+
+\\begin{equation}
+\\text{Net Annual Savings} = \\Delta kWh \\times \\$${elecRate.toFixed(3)} = \\$${hrFormatNumber(r.totalCostSavings)}
+\\label{eq:elec-savings}
+\\end{equation}`;
+    } else {
+        const heatingEfficiency = parseFloat(document.getElementById('heatingEfficiency').value) / 100;
+        const fuelCost = parseFloat(document.getElementById('fuelCost').value);
+        latex += `
+
+\\subsection*{Fossil Fuel Displaced}
+
+Recovered heat offsets a fossil heating system of efficiency $Eff_{\\text{heat}} = ${heatingEfficiency.toFixed(2)}$:
+
+\\begin{equation}
+\\Delta MMBtu = \\frac{Q_{\\text{rec}} \\times 3{,}412}{Eff_{\\text{heat}} \\times 10^6} = \\frac{${hrFormatNumber(r.recoveredKWh)} \\times 3{,}412}{${heatingEfficiency.toFixed(2)} \\times 10^6} = ${hrFormatNumber(r.fossilMMBtu, 1)} \\text{ MMBtu}
+\\label{eq:mmbtu}
+\\end{equation}
+
+\\subsection*{Net Annual Savings}
+
+Fuel savings less the electric fan penalty:
 
 \\begin{equation}
 \\begin{split}
-\\text{Energy Cost Savings} &= \\text{Fuel Displaced} \\times \\text{Fuel Cost} \\\\
-&= ${hrFormatNumber(fuelDisplaced, 1)} \\text{ ${fuelUnit}} \\times \\$${fuelCost.toFixed(2)}\\text{/${fuelUnit}} \\\\
-&= \\$${hrFormatNumber(energyCostSavings)}
+\\text{Net Savings} &= \\Delta MMBtu \\times \\$${fuelCost.toFixed(2)} - \\Delta kWh_{\\text{fan}} \\times \\$${elecRate.toFixed(3)} \\\\
+&= \\$${hrFormatNumber(r.fuelSavings)} - \\$${hrFormatNumber(r.fanCost)} = \\$${hrFormatNumber(r.totalCostSavings)}
 \\end{split}
-\\label{eq:energy-cost}
-\\end{equation}`;
-
-    if (isElectric) {
-        const demandRate = parseFloat(document.getElementById('hrDemandRate').value) || 0;
-        latex += `
-
-\\subsection*{Demand Savings}
-
-The demand reduction from displaced electric resistance heating is:
-
-\\begin{equation}
-\\Delta kW = \\frac{Q_{\\text{recoverable}}}{3{,}412 \\times \\eta_{\\text{heating}}} = \\frac{${hrFormatNumber(qRecoverable)}}{3{,}412 \\times ${heatingEfficiency.toFixed(2)}} = ${hrFormatNumber(kwReduction, 1)} \\text{ kW}
-\\label{eq:kw-reduction}
-\\end{equation}
-
-\\begin{equation}
-\\Delta kW\\text{-months} = \\Delta kW \\times N_{\\text{heating}} = ${hrFormatNumber(kwReduction, 1)} \\times ${heatingMonths} = ${hrFormatNumber(kwMonths, 1)} \\text{ kW-months}
-\\label{eq:kw-months}
-\\end{equation}
-
-\\begin{equation}
-\\text{Demand Cost Savings} = \\Delta kW\\text{-months} \\times \\text{Demand Rate} = ${hrFormatNumber(kwMonths, 1)} \\times \\$${demandRate.toFixed(2)} = \\$${hrFormatNumber(demandCostSavings)}
-\\label{eq:demand-cost}
-\\end{equation}
-
-\\begin{equation}
-\\text{Total Annual Savings} = \\$${hrFormatNumber(energyCostSavings)} + \\$${hrFormatNumber(demandCostSavings)} = \\$${hrFormatNumber(totalCostSavings)}
-\\label{eq:total-savings}
+\\label{eq:fossil-savings}
 \\end{equation}`;
     }
 
@@ -369,17 +474,14 @@ The demand reduction from displaced electric resistance heating is:
 }
 
 function hrCopyEquations() {
-    const equationsCode = document.getElementById('hrEquationsCode').textContent;
-    const btn = document.getElementById('hrCopyEquationsButton');
+    hrCopyText(document.getElementById('hrEquationsCode').textContent, document.getElementById('hrCopyEquationsButton'));
+}
 
+function hrCopyText(text, btn) {
     if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(equationsCode).then(() => {
-            hrShowCopySuccess(btn);
-        }).catch(() => {
-            hrFallbackCopy(equationsCode, btn);
-        });
+        navigator.clipboard.writeText(text).then(() => hrShowCopySuccess(btn)).catch(() => hrFallbackCopy(text, btn));
     } else {
-        hrFallbackCopy(equationsCode, btn);
+        hrFallbackCopy(text, btn);
     }
 }
 
@@ -398,19 +500,14 @@ function hrFallbackCopy(text, btn) {
         hrShowCopySuccess(btn);
     } catch (err) {
         btn.textContent = 'Copy failed';
-        setTimeout(() => {
-            btn.textContent = 'Copy to Clipboard';
-        }, 2000);
+        setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
     }
-
     document.body.removeChild(textArea);
 }
 
 function hrShowCopySuccess(btn) {
     btn.textContent = 'Copied!';
-    setTimeout(() => {
-        btn.textContent = 'Copy to Clipboard';
-    }, 2000);
+    setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
 }
 
 // Initialize on every page load (including instant-nav swaps). Bails out unless
@@ -420,6 +517,8 @@ function hrInitCalculator() {
     const root = document.getElementById('heat-recovery-calculator');
     if (!root) return;
 
+    hrPopulateLocations();
+
     root.querySelectorAll('input, select').forEach(input => {
         if (input.dataset.hrBound) return;
         input.dataset.hrBound = 'true';
@@ -427,6 +526,8 @@ function hrInitCalculator() {
         input.addEventListener('input', hrCalculate);
     });
 
+    hrUpdateFuelDefaults();
+    hrUpdateHeatingHours();
     hrCalculate();
 }
 

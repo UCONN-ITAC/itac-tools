@@ -47,14 +47,15 @@
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
         <div>
-            <label for="motorPower" style="display: block; margin-bottom: 5px; font-weight: 500;">Compressor Motor Power:</label>
+            <label for="motorPower" style="display: block; margin-bottom: 5px; font-weight: 500;">Compressor Motor Power (hp<sub>comp</sub>):</label>
             <div style="display: flex; gap: 10px;">
                 <input type="number" id="motorPower" value="100" step="1" style="flex: 1; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
-                <select id="powerUnit" onchange="hrCalculate()" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+                <select id="powerUnit" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
                     <option value="hp">HP</option>
                     <option value="kw">kW</option>
                 </select>
             </div>
+            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Nameplate motor rating</p>
         </div>
         <div>
             <label for="compressorType" style="display: block; margin-bottom: 5px; font-weight: 500;">Compressor Type:</label>
@@ -69,18 +70,61 @@
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
         <div>
-            <label for="rejectionFactor" style="display: block; margin-bottom: 5px; font-weight: 500;">Heat Rejection Factor:</label>
-            <input type="number" id="rejectionFactor" value="0.85" step="0.01" min="0" max="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
-            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Fraction of input energy rejected as recoverable heat (auto-filled from compressor type)</p>
+            <label for="loadFactor" style="display: block; margin-bottom: 5px; font-weight: 500;">Load Factor (LF):</label>
+            <input type="number" id="loadFactor" value="0.92" step="0.01" min="0" max="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Average fraction of full load while running (TRM default 0.92)</p>
         </div>
         <div>
-            <label for="annualCompressorHours" style="display: block; margin-bottom: 5px; font-weight: 500;">Annual Compressor Operating Hours:</label>
-            <input type="number" id="annualCompressorHours" value="8760" step="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
-            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Total loaded hours compressor runs per year </p>
+            <label for="recoveryEfficiency" style="display: block; margin-bottom: 5px; font-weight: 500;">Recovery Efficiency (RE):</label>
+            <input type="number" id="recoveryEfficiency" value="0.85" step="0.01" min="0" max="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Fraction of input energy recoverable as useful heat (auto-filled from type; TRM default 0.80)</p>
         </div>
     </div>
 
-    <h3 style="margin-top: 30px;">Heating System Parameters</h3>
+    <h3 style="margin-top: 30px;">Operating Hours &amp; Location</h3>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+        <div>
+            <label for="hrLocation" style="display: block; margin-bottom: 5px; font-weight: 500;">Location:</label>
+            <select id="hrLocation" onchange="hrUpdateHeatingHours()" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);"></select>
+            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Representative city (NY, NJ &amp; New England)</p>
+        </div>
+        <div>
+            <label for="hrSchedule" style="display: block; margin-bottom: 5px; font-weight: 500;">Operating Schedule:</label>
+            <select id="hrSchedule" onchange="hrUpdateHeatingHours()" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+                <option value="single">Single Shift (7am–3pm, M–F)</option>
+                <option value="two">Two Shift (7am–11pm, M–F)</option>
+                <option value="three">Three Shift (24h, M–F)</option>
+                <option value="continuous" selected>Continuous (24/7)</option>
+                <option value="custom">Custom (enter hours)</option>
+            </select>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+        <div>
+            <label for="coincidentHours" style="display: block; margin-bottom: 5px; font-weight: 500;">Coincident Heating Hours (hrs):</label>
+            <input type="number" id="coincidentHours" value="5578" step="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Compressor hours coincident with heating (auto-filled from location + schedule; hours below a 63&deg;F balance point from 2014–2023 climate normals). Set schedule to Custom to override.</p>
+        </div>
+    </div>
+
+    <h3 style="margin-top: 30px;">Distribution Fan</h3>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+        <div>
+            <label for="fanHp" style="display: block; margin-bottom: 5px; font-weight: 500;">Distribution Fan Motor (hp<sub>fan</sub>):</label>
+            <input type="number" id="fanHp" value="1.0" step="0.25" min="0" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Added fan to distribute recovered heat. Use 0 if no fan, or the net hp if an existing fan is reused.</p>
+        </div>
+        <div>
+            <label for="fanEff" style="display: block; margin-bottom: 5px; font-weight: 500;">Fan Motor Efficiency (Eff<sub>fan</sub>):</label>
+            <input type="number" id="fanEff" value="0.855" step="0.001" min="0" max="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">NEMA nominal full-load efficiency (TRM default 0.855 for 1 hp)</p>
+        </div>
+    </div>
+
+    <h3 style="margin-top: 30px;">Heating System Displaced</h3>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
         <div>
@@ -89,38 +133,55 @@
                 <option value="natural-gas">Natural Gas (MMBtu)</option>
                 <option value="propane">Propane (MMBtu)</option>
                 <option value="fuel-oil">No. 2 Fuel Oil (MMBtu)</option>
-                <option value="electric">Electric Resistance (kWh)</option>
+                <option value="electric">Electric (kWh)</option>
             </select>
         </div>
         <div>
-            <label for="heatingEfficiency" style="display: block; margin-bottom: 5px; font-weight: 500;">Heating System Efficiency (%):</label>
-            <input type="number" id="heatingEfficiency" value="85" step="1" min="1" max="100" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+            <label for="hrElecRate" style="display: block; margin-bottom: 5px; font-weight: 500;">Electricity Cost ($/kWh):</label>
+            <input type="number" id="hrElecRate" value="0.15" step="0.001" min="0" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Used to cost the fan penalty (and electric heating, if selected)</p>
         </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
-        <div>
-            <label for="fuelCost" style="display: block; margin-bottom: 5px; font-weight: 500;">Fuel Cost ($ per unit):</label>
-            <input type="number" id="fuelCost" value="15.00" step="0.01" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
-            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;" id="fuelCostLabel">$/MMBtu for natural gas</p>
+    <!-- Fossil-fuel heating parameters -->
+    <div id="hrFossilParams">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+            <div>
+                <label for="heatingEfficiency" style="display: block; margin-bottom: 5px; font-weight: 500;">Heating System Efficiency (Eff<sub>heating</sub>, %):</label>
+                <input type="number" id="heatingEfficiency" value="85" step="1" min="1" max="100" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Thermal efficiency of the displaced system (TRM default 80%)</p>
+            </div>
+            <div>
+                <label for="fuelCost" style="display: block; margin-bottom: 5px; font-weight: 500;">Fuel Cost ($ per unit):</label>
+                <input type="number" id="fuelCost" value="15.00" step="0.01" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;" id="fuelCostLabel">$/MMBtu for natural gas</p>
+            </div>
         </div>
-        <div>
-            <label for="fuelHoC" style="display: block; margin-bottom: 5px; font-weight: 500;">Heat of Combustion (Btu/unit):</label>
-            <input type="number" id="fuelHoC" value="1000000" step="100" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
-            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;" id="fuelHoCLabel">1,000,000 Btu/MMBtu (by definition)</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+            <div>
+                <label for="fuelHoC" style="display: block; margin-bottom: 5px; font-weight: 500;">Heat of Combustion (Btu/unit):</label>
+                <input type="number" id="fuelHoC" value="1000000" step="100" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;" id="fuelHoCLabel">1,000,000 Btu/MMBtu (by definition)</p>
+            </div>
         </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
-        <div>
-            <label for="heatingMonths" style="display: block; margin-bottom: 5px; font-weight: 500;">Number of Heating Months per Year:</label>
-            <input type="number" id="heatingMonths" value="6" step="1" min="1" max="12" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
-            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Months per year with heating demand (typically 5 to 8 in northern climates)</p>
-        </div>
-        <div id="demandRateSection" style="display: none;">
-            <label for="hrDemandRate" style="display: block; margin-bottom: 5px; font-weight: 500;">Demand Rate ($/kW-month):</label>
-            <input type="number" id="hrDemandRate" value="8.50" step="0.01" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
-            <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Monthly demand charge per kW of peak demand</p>
+    <!-- Electric heating parameters -->
+    <div id="hrElectricParams" style="display: none;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+            <div>
+                <label for="elecHeatType" style="display: block; margin-bottom: 5px; font-weight: 500;">Electric Heating Type:</label>
+                <select id="elecHeatType" onchange="hrUpdateHeatingCOP()" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+                    <option value="resistance">Electric Resistance (COP 1.0)</option>
+                    <option value="heat-pump">Heat Pump (COP 3.2)</option>
+                    <option value="custom">Custom COP</option>
+                </select>
+            </div>
+            <div>
+                <label for="heatingCOP" style="display: block; margin-bottom: 5px; font-weight: 500;">Heating COP (COP<sub>heating</sub>):</label>
+                <input type="number" id="heatingCOP" value="1.0" step="0.1" min="0.1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; background: var(--md-default-bg-color); color: var(--md-default-fg-color);">
+                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Coefficient of performance of displaced heating (resistance 1.0, heat pump 3.2)</p>
+            </div>
         </div>
     </div>
 
@@ -129,16 +190,16 @@
     <div id="hrResults" style="margin: 20px 0; padding: 20px; background: var(--md-default-bg-color); border-radius: 6px; border: 1px solid var(--md-default-fg-color--lightest);">
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
             <div>
-                <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.9em;">Motor Input Power:</p>
-                <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em;" id="hrMotorPowerResult">254,500 Btu/hr</p>
+                <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.9em;">Compressor Input Power:</p>
+                <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em;" id="hrInputKwResult">74.6 kW</p>
             </div>
             <div>
-                <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.9em;">Recoverable Heat (at full load):</p>
-                <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em;" id="hrRecoverableResult">216,325 Btu/hr</p>
+                <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.9em;">Recovered Heat (avg load):</p>
+                <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em;" id="hrRecoverableResult">0 Btu/hr</p>
             </div>
             <div>
-                <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.9em;">Heating Season Hours:</p>
-                <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em;" id="hrHeatingHoursResult">4,380 hrs</p>
+                <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.9em;">Coincident Heating Hours:</p>
+                <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em;" id="hrHeatingHoursResult">0 hrs</p>
             </div>
         </div>
 
@@ -149,33 +210,34 @@
                     <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrAnnualHeatResult">0 MMBtu</p>
                 </div>
                 <div>
-                    <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Annual Fuel Displaced</p>
+                    <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;" id="hrDisplacedLabel">Annual Fuel Displaced</p>
                     <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrFuelDisplacedResult">0 MMBtu</p>
                 </div>
                 <div>
-                    <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Annual Energy Cost Savings</p>
-                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrEnergyCostResult">$0</p>
+                    <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Fan Energy Penalty</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #e5534b;" id="hrFanKwhResult">0 kWh</p>
+                    <p style="margin: 5px 0; font-family: monospace; font-size: 1.0em; color: #e5534b;" id="hrFanCostResult">$0</p>
                 </div>
             </div>
 
-            <div id="hrDemandResultsRow" style="display: none; margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(76, 175, 80, 0.3);">
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(76, 175, 80, 0.3);">
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center;">
                     <div>
-                        <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Demand Reduction</p>
-                        <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrKwResult">0 kW</p>
+                        <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;" title="Net annual electric energy savings">&Delta;kWh (electric)</p>
+                        <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrDeltaKwhResult">0 kWh</p>
                     </div>
                     <div>
-                        <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Demand Savings</p>
-                        <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrKwMonthsResult">0 kW-mo</p>
-                        <p style="margin: 5px 0; font-family: monospace; font-size: 1.1em; color: #4caf50;" id="hrDemandCostResult">$0</p>
+                        <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;" title="Annual fossil fuel energy savings">&Delta;MMBtu (fossil)</p>
+                        <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrDeltaMMBtuResult">0 MMBtu</p>
                     </div>
                     <div>
-                        <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Total Annual Savings</p>
-                        <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrTotalCostResult">$0</p>
+                        <p style="margin: 5px 0; color: var(--md-default-fg-color--light); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">Net Annual Savings</p>
+                        <p style="margin: 5px 0; font-family: monospace; font-size: 1.4em; font-weight: 600; color: #4caf50;" id="hrNetSavingsResult">$0</p>
                     </div>
                 </div>
             </div>
         </div>
+        <p style="margin: 15px 0 0; font-size: 0.8em; color: var(--md-default-fg-color--light);">Peak coincident demand savings are N/A for this measure (space-heating load only) and are not claimed.</p>
     </div>
 
     <div style="margin-top: 20px;">
