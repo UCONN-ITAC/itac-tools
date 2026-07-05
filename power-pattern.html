@@ -73,8 +73,10 @@
 
     <div style="margin: 15px 0; padding: 15px; background: var(--surface-sunken); border-radius: 6px;">
         <p style="font-size: 0.9em; color: var(--md-default-fg-color--light); margin-bottom: 10px;">
-            Real power is calculated as: P = √3 × V × I × PF. Discharge pressure and
-            inlet temperature are used for the isentropic efficiency estimate.
+            Real power is calculated as: P = √3 × V × I × PF. Discharge pressure is
+            used for the isentropic efficiency estimate. Inlet air is assumed to be
+            at the CAGI standard 20 °C — intake-temperature effects are handled by
+            the Cold Intake calculator.
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
             <div>
@@ -96,11 +98,6 @@
                 <label for="dischargePsi" style="display: block; margin-bottom: 5px; font-weight: 500;">Discharge Pressure (PSI):</label>
                 <input type="number" id="dischargePsi" placeholder="125" step="1" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
                 <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">Gauge, for efficiency</p>
-            </div>
-            <div>
-                <label for="inletTempC" style="display: block; margin-bottom: 5px; font-weight: 500;">Inlet Temp (°C):</label>
-                <input type="number" id="inletTempC" placeholder="20" step="0.1" value="20" style="width: 100%; padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">
-                <p style="font-size: 0.85em; color: var(--md-default-fg-color--light); margin-top: 5px;">CAGI standard: 20°C</p>
             </div>
         </div>
     </div>
@@ -229,6 +226,7 @@
     <div id="results" style="margin: 20px 0; padding: 20px; background: var(--surface-sunken); border-radius: 6px; display: none;">
         <h3 style="margin-top: 0; color: #20bf55;">Results</h3>
         <div id="resultsContent"></div>
+        <div id="specPowerChart" style="margin: 20px 0 0; height: 360px; display: none;"></div>
     </div>
 
     </div>

@@ -379,6 +379,62 @@
     return { avgKw: n > 0 ? sum / n : 0, nSamples: n };
   }
 
+  // Time-weighted average flow and specific power (kW per 100 CFM) across the
+  // above-threshold samples, using the flow lookup only — no discharge pressure
+  // needed, so this is available whenever a usable control-type config exists.
+  // flowP10/flowP90 bound the band the machine "tends to operate" in. Returns
+  // { avgCfm, avgKw, specPower, flowP10, flowP90, nSamples } or null.
+  function averageOperatingFlow(series, config, threshold) {
+    let cfmSum = 0, kwSum = 0, specSum = 0, n = 0;
+    const flows = [];
+    for (let i = 0; i < series.length; i++) {
+      const kw = series[i].kW;
+      if (kw < threshold) continue;
+      const flow = flowForPower(kw, config);
+      if (!(flow > 0)) continue;
+      flows.push(flow);
+      cfmSum += flow; kwSum += kw; specSum += kw / (flow / 100); n++;
+    }
+    if (n === 0) return null;
+    flows.sort(function (a, b) { return a - b; });
+    function pct(p) {
+      const idx = Math.min(flows.length - 1, Math.max(0, Math.round((p / 100) * (flows.length - 1))));
+      return flows[idx];
+    }
+    return {
+      avgCfm: cfmSum / n, avgKw: kwSum / n, specPower: specSum / n,
+      flowP10: pct(10), flowP90: pct(90), nSamples: n
+    };
+  }
+
+  // Specific-power curve (kW per 100 CFM vs. flow) implied by the control-type
+  // config, for plotting. VFD configs are swept across their power range and
+  // mapped to flow; load/unload configs yield their two discrete operating
+  // states. Returns { cfm:[], specPower:[] } (empty when the config is unusable).
+  function specificPowerCurve(config, nPoints) {
+    nPoints = nPoints || 48;
+    const cfm = [], specPower = [];
+    if (!config) return { cfm: cfm, specPower: specPower };
+    if (config.type === 'vfd') {
+      if (!config.power || config.power.length < 2) return { cfm: cfm, specPower: specPower };
+      const pMin = config.power[0];
+      const pMax = config.power[config.power.length - 1];
+      for (let i = 0; i < nPoints; i++) {
+        const kw = pMin + (pMax - pMin) * (i / (nPoints - 1));
+        const flow = linearInterpolate(kw, config.power, config.flow);
+        if (!(flow > 0)) continue;
+        cfm.push(flow);
+        specPower.push(kw / (flow / 100));
+      }
+    } else {
+      [[config.unloadedPower, config.unloadedFlow],
+       [config.loadedPower, config.loadedFlow]].forEach(function (s) {
+        if (s[0] > 0 && s[1] > 0) { cfm.push(s[1]); specPower.push(s[0] / (s[1] / 100)); }
+      });
+    }
+    return { cfm: cfm, specPower: specPower };
+  }
+
   const EFF_GAMMA = 1.40287268;
   const EFF_R_AIR = 0.28703905;
   const EFF_P_ATM = 101.325;                 // kPa
@@ -451,6 +507,8 @@
     flowForPower: flowForPower,
     suggestThreshold: suggestThreshold,
     averageOperatingPower: averageOperatingPower,
+    averageOperatingFlow: averageOperatingFlow,
+    specificPowerCurve: specificPowerCurve,
     isentropicEfficiency: isentropicEfficiency,
     timeWeightedEfficiency: timeWeightedEfficiency,
     errorHTML: errorHTML

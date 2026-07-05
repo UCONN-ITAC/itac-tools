@@ -228,11 +228,14 @@
     html += '<button type="button" id="autoGroupBtn" style="padding: 6px 12px; background: var(--md-primary-fg-color, #013ecd); color: white; border: none; border-radius: 4px; cursor: pointer;">Re-run auto-group</button>';
     html += '</div>';
 
-    html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">';
+    // Four columns so the seven days wrap onto two tidy rows; minmax(0,1fr) plus
+    // min-width:0 on the cell and select lets them shrink instead of overflowing
+    // and stacking the day labels on top of the neighbouring dropdown.
+    html += '<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;">';
     DAY_NAMES.forEach(function (name, d) {
-      html += '<div style="display: flex; align-items: center; gap: 6px;">' +
+      html += '<div style="display: flex; align-items: center; gap: 8px; min-width: 0;">' +
         '<span style="width: 34px; font-weight: 500;">' + name + '</span>' +
-        '<select class="day-bucket" data-day="' + d + '" style="flex: 1; padding: 6px;">' +
+        '<select class="day-bucket" data-day="' + d + '" style="flex: 1; min-width: 0; padding: 6px;">' +
         buckets.map(function (b, i) {
           return '<option value="' + i + '"' + (assignment[d] === i ? ' selected' : '') + '>' + b.name + '</option>';
         }).join('') +
@@ -304,6 +307,14 @@
     });
   }
 
+  // Fully-resolved foreground color for chart text. Reading the computed `color`
+  // of the body (rather than the raw --md-default-fg-color custom property, which
+  // can come back as an unresolved `var(...)`) always yields a concrete rgb()
+  // value that Plotly can render, and it tracks the active light/dark theme.
+  function fgColor() {
+    return getComputedStyle(document.body).color || '#0d1426';
+  }
+
   function baseLayout(title, xTitle, yTitle) {
     return {
       title: title,
@@ -311,9 +322,28 @@
       yaxis: { title: yTitle },
       paper_bgcolor: 'rgba(0,0,0,0)',
       plot_bgcolor: 'rgba(0,0,0,0)',
-      font: { color: getComputedStyle(document.body).getPropertyValue('--md-default-fg-color') },
+      font: { color: fgColor() },
       margin: { t: 50, b: 50, l: 60, r: 20 }
     };
+  }
+
+  // Keep already-drawn charts legible when the user flips the theme: Plotly plots
+  // freeze their font color at draw time, so re-apply the resolved color to every
+  // plotted chart whenever the data-theme attribute changes.
+  function watchTheme() {
+    if (document.documentElement.dataset.peThemeWatch === 'true') return;
+    document.documentElement.dataset.peThemeWatch = 'true';
+    const obs = new MutationObserver(function () {
+      if (!window.Plotly) return;
+      const color = fgColor();
+      ['weeklyHeatmap', 'bucketProfiles', 'specPowerChart'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el && el.data && el.style.display !== 'none') {
+          Plotly.relayout(el, { 'font.color': color });
+        }
+      });
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
   // --- Results -------------------------------------------------------------
@@ -341,22 +371,25 @@
     const avg = PP().averageOperatingPower(series, threshold);
     const loadPct = nameplate > 0 ? (avg.avgKw / nameplate) * 100 : 0;
 
-    // Time-weighted isentropic efficiency from the flow lookup.
+    // Flow & specific power from the flow lookup (no discharge pressure needed),
+    // then time-weighted isentropic efficiency (which does need pressure).
+    // Inlet air is fixed at the CAGI standard 20 °C; intake-temperature effects
+    // are handled by the Cold Intake calculator.
     const config = getConfig();
     const psi = num('dischargePsi');
-    const inletC = isNaN(num('inletTempC')) ? 20 : num('inletTempC');
-    const eff = PP().timeWeightedEfficiency(series, config, threshold, { psi: psi, inletC: inletC });
+    const flowStats = PP().averageOperatingFlow(series, config, threshold);
+    const eff = PP().timeWeightedEfficiency(series, config, threshold, { psi: psi, inletC: 20 });
 
     let effTile;
     if (!(psi > 0)) {
-      effTile = tile('Time-Weighted Efficiency', 'enter PSI', null);
+      effTile = tile('Time-Weighted Isentropic Efficiency', 'enter PSI', null);
     } else if (config.type === 'vfd' && config.power.length < 2) {
-      effTile = tile('Time-Weighted Efficiency', 'need VFD points', null);
+      effTile = tile('Time-Weighted Isentropic Efficiency', 'need VFD points', null);
     } else if (!eff) {
-      effTile = tile('Time-Weighted Efficiency', 'no data', null);
+      effTile = tile('Time-Weighted Isentropic Efficiency', 'no data', null);
     } else {
       const c = eff.effPct > 100 ? '#db2955' : (eff.effPct < 50 ? '#ff7700' : '#20bf55');
-      effTile = tile('Time-Weighted Efficiency', eff.effPct.toFixed(1) + '%', c);
+      effTile = tile('Time-Weighted Isentropic Efficiency', eff.effPct.toFixed(1) + '%', c);
     }
 
     // Per-bucket EFLH share + average power.
@@ -383,7 +416,8 @@
         tile('Avg Operating Power', avg.avgKw.toFixed(1) + ' kW', null) +
         tile('Annual Energy', Math.round(r.annualKwh).toLocaleString() + ' kWh', null) +
         effTile +
-        (eff && psi > 0 ? tile('Avg Flow', eff.avgCfm.toFixed(0) + ' CFM', null) : '') +
+        (flowStats ? tile('Avg Flow', flowStats.avgCfm.toFixed(0) + ' CFM', null) : '') +
+        (flowStats ? tile('Avg Specific Power', flowStats.specPower.toFixed(1) + ' kW/100cfm', null) : '') +
       '</div>' +
       '<p style="margin: 6px 0; font-size: 0.9em; color: var(--md-default-fg-color--light);">' +
         '<strong>Average load:</strong> ' + loadPct.toFixed(0) + '% of nameplate · ' +
@@ -405,6 +439,52 @@
         'the threshold, so idle/off periods don\'t drag them down.</p>';
 
     document.getElementById('results').style.display = 'block';
+    renderSpecificPowerChart(config, flowStats);
+  }
+
+  // Specific-power curve (kW / 100 CFM vs. flow) for the configured compressor,
+  // with the band it tends to operate in shaded and its typical operating point
+  // marked from the logged data.
+  function renderSpecificPowerChart(config, flowStats) {
+    const el = document.getElementById('specPowerChart');
+    if (!el) return;
+    const curve = PP().specificPowerCurve(config);
+    if (!curve.cfm.length) { el.style.display = 'none'; return; }
+
+    const traces = [{
+      x: curve.cfm, y: curve.specPower, type: 'scatter',
+      mode: config.type === 'vfd' ? 'lines' : 'lines+markers',
+      line: { color: '#013ecd', width: 2 }, marker: { color: '#013ecd', size: 8 },
+      name: 'Specific power',
+      hovertemplate: '%{x:.0f} CFM<br>%{y:.2f} kW/100cfm<extra></extra>'
+    }];
+    if (flowStats) {
+      traces.push({
+        x: [flowStats.avgCfm], y: [flowStats.specPower], type: 'scatter', mode: 'markers',
+        marker: { color: '#ff7700', size: 13, line: { color: '#ffffff', width: 1.5 } },
+        name: 'Typical operation',
+        hovertemplate: 'Typical operation<br>%{x:.0f} CFM<br>%{y:.2f} kW/100cfm<extra></extra>'
+      });
+    }
+
+    const layout = baseLayout('Specific Power Curve (kW per 100 CFM)', 'Flow (CFM)', 'kW / 100 CFM');
+    layout.yaxis.rangemode = 'tozero';
+    layout.showlegend = true;
+    layout.legend = { orientation: 'h', y: 1.12, x: 0 };
+    if (flowStats && flowStats.flowP90 > flowStats.flowP10) {
+      layout.shapes = [{
+        type: 'rect', xref: 'x', yref: 'paper',
+        x0: flowStats.flowP10, x1: flowStats.flowP90, y0: 0, y1: 1,
+        fillcolor: 'rgba(255,119,0,0.10)', line: { width: 0 }, layer: 'below'
+      }];
+    }
+
+    el.style.display = 'block';
+    window.loadScriptOnce(window.PLOTLY_SRC).then(function () {
+      if (document.getElementById('specPowerChart')) {
+        Plotly.newPlot('specPowerChart', traces, layout, { responsive: true, displayModeBar: true });
+      }
+    });
   }
 
   function tile(label, value, color) {
@@ -445,6 +525,7 @@
     if (!root) return;
 
     offerReuse();
+    watchTheme();
 
     bind('loadDataBtn', 'click', loadCSV);
     bind('calcBtn', 'click', compute);
