@@ -1,0 +1,8 @@
+{
+  "name": "itac-tools",
+  "private": true,
+  "description": "Static energy-assessment calculators for the UCONN ITAC. No runtime dependencies; package.json exists only to run the test suite.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
