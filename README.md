@@ -9,10 +9,11 @@ Industrial Training and Assessment Center (ITAC)**, hosted at
 | Page | Purpose |
 |---|---|
 | `leak-rate.html` | Determine compressed-air leak rates from logged compressor power data (CSV upload). |
-| `power-pattern.html` | Weekly power-pattern heatmap, average power, and equivalent full-load hours (EFLH) from logged CT current data (CSV upload). |
+| `power-pattern.html` | Power &amp; efficiency analyzer: weekly power-pattern heatmap, day-type grouping, EFLH, average operating power, and time-weighted isentropic efficiency from logged CT current data (CSV upload). |
 | `cold-intake.html` | Estimate energy/cost savings from a cold outdoor-air intake system. |
 | `heat-recovery.html` | Estimate fuel savings from recovering compressor waste heat. |
-| `vsd-efficiency.html` | Back-calculate isentropic efficiency from measured specific-power data. |
+
+The standalone VSD isentropic efficiency estimator was absorbed into `power-pattern.html`.
 
 ## How it works
 
@@ -23,8 +24,9 @@ Plain static HTML — no build step. Each calculator is a self-contained page:
 - **`assets/js/extra.js`** — shared helpers (`loadScriptOnce`, `PLOTLY_SRC`) that
   lazy-load Plotly from CDN on demand.
 - **`assets/js/power-profile.js`** — shared `window.PowerProfile` engine (robust
-  CSV parse, datetime parse, `√3·V·I·PF` power, weekly profile, EFLH) used by the
-  CSV-driven tools (`leak-rate`, `power-pattern`).
+  CSV parse, datetime parse, `√3·V·I·PF` power, weekly profile, EFLH, day-type
+  grouping, power→flow lookup, and isentropic efficiency) used by the CSV-driven
+  tools (`leak-rate`, `power-pattern`).
 - **`assets/js/site.js`** — light/dark theme toggle.
 - **`assets/js/<calculator>.js`** — one script per calculator (ported verbatim
   from the docs site; each already falls back to `DOMContentLoaded` when the
