@@ -16,8 +16,8 @@
 (function () {
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   // Brand data-viz categorical order: cobalt → green → azure → crimson → orange,
-  // then neutral/tinted extras for additional buckets.
-  const BUCKET_COLORS = ['#013ecd', '#20bf55', '#00a6fb', '#db2955', '#ff7700', '#6b7385', '#3a6ad9'];
+  // then neutral/tinted extras for additional buckets. Resolved from theme tokens
+  // at draw time — see bucketColors() near fgColor().
 
   let csvData = [];
   let headers = [];
@@ -78,7 +78,7 @@
     row.innerHTML =
       '<input type="number" class="vfd-power" placeholder="kW" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">' +
       '<input type="number" class="vfd-flow" placeholder="CFM" step="0.1" style="padding: 8px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;">' +
-      '<button type="button" class="vfd-remove" style="padding: 6px; background: #db2955; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>';
+      '<button type="button" class="vfd-remove" style="padding: 6px; background: var(--color-crimson); color: var(--color-white); border: none; border-radius: 4px; cursor: pointer;">✕</button>';
     container.appendChild(row);
   }
 
@@ -224,8 +224,8 @@
           'style="padding: 6px; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; width: 130px;">' +
         '<span style="font-size: 0.85em; color: var(--md-default-fg-color--light);">' + count + 'd</span></span>';
     });
-    html += '<button type="button" id="addBucketBtn" style="padding: 6px 12px; background: #20bf55; color: white; border: none; border-radius: 4px; cursor: pointer;">+ Add bucket</button>';
-    html += '<button type="button" id="autoGroupBtn" style="padding: 6px 12px; background: var(--md-primary-fg-color, #013ecd); color: white; border: none; border-radius: 4px; cursor: pointer;">Re-run auto-group</button>';
+    html += '<button type="button" id="addBucketBtn" style="padding: 6px 12px; background: var(--color-green); color: var(--color-white); border: none; border-radius: 4px; cursor: pointer;">+ Add bucket</button>';
+    html += '<button type="button" id="autoGroupBtn" style="padding: 6px 12px; background: var(--md-primary-fg-color); color: var(--color-white); border: none; border-radius: 4px; cursor: pointer;">Re-run auto-group</button>';
     html += '</div>';
 
     // Four columns so the seven days wrap onto two tidy rows; minmax(0,1fr) plus
@@ -245,7 +245,7 @@
     host.innerHTML = html;
   }
 
-  function color(i) { return BUCKET_COLORS[i % BUCKET_COLORS.length]; }
+  function color(i) { const p = bucketColors(); return p[i % p.length]; }
 
   // Delegated handler for the day-type UI (rebuilt on every render).
   function onDayTypeChange(e) {
@@ -274,7 +274,7 @@
     const prof = PP().weeklyProfile(series);
     const heatmap = {
       z: prof.meanKw, x: hours, y: DAY_NAMES, type: 'heatmap',
-      colorscale: [[0, '#0a1a4d'], [0.5, '#00a6fb'], [1, '#20bf55']],
+      colorscale: [[0, cssVar('--color-ink', '#0d1426')], [0.5, cssVar('--color-azure', '#00a6fb')], [1, cssVar('--color-green', '#20bf55')]],
       colorbar: { title: 'kW' },
       hovertemplate: '%{y} %{x}:00<br>%{z:.1f} kW<extra></extra>'
     };
@@ -313,6 +313,27 @@
   // value that Plotly can render, and it tracks the active light/dark theme.
   function fgColor() {
     return getComputedStyle(document.body).color || '#0d1426';
+  }
+
+  // Resolve a theme token to a concrete color string Plotly can render (canvas
+  // can't read `var(...)`); mirrors fgColor(). Tracks the active light/dark theme.
+  function cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  // Same token as an rgba() with alpha, for translucent chart fills.
+  function cssVarAlpha(name, a, fallback) {
+    const hex = cssVar(name, fallback);
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+    if (!m) return hex;
+    return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + a + ')';
+  }
+  // Brand palette for bucket series, resolved at draw time so swatches follow
+  // the active theme. Order mirrors the old BUCKET_COLORS constant.
+  function bucketColors() {
+    return ['--color-cobalt', '--color-green', '--color-azure', '--color-crimson',
+            '--color-orange', '--color-gray-500', '--color-cobalt-light']
+      .map(function (n) { return cssVar(n, '#013ecd'); });
   }
 
   function baseLayout(title, xTitle, yTitle) {
@@ -394,7 +415,7 @@
     } else if (!eff) {
       effTile = tile(effLabel, 'no data', null);
     } else {
-      const c = eff.effPct > 100 ? '#db2955' : (eff.effPct < 50 ? '#ff7700' : '#20bf55');
+      const c = eff.effPct > 100 ? 'var(--color-crimson)' : (eff.effPct < 50 ? 'var(--color-orange)' : 'var(--color-green)');
       effTile = tile(effLabel, eff.effPct.toFixed(1) + '%', c);
     }
 
@@ -416,7 +437,7 @@
     }
     const warnHtml = warnings.length
       ? '<div style="margin: 0 0 14px 0; padding: 10px 12px; border-radius: 6px; ' +
-        'background: rgba(255,119,0,0.10); color: var(--color-orange, #ff7700); font-size: 0.9em;">' +
+        'background: color-mix(in srgb, var(--color-orange) 10%, transparent); color: var(--color-orange); font-size: 0.9em;">' +
         '⚠ ' + warnings.join('<br>⚠ ') + '</div>'
       : '';
 
@@ -441,7 +462,7 @@
     document.getElementById('resultsContent').innerHTML =
       warnHtml +
       '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; text-align: center; margin-bottom: 16px;">' +
-        tile('Equivalent Full-Load Hours', r.eflh.toFixed(0) + ' hr/yr', '#20bf55') +
+        tile('Equivalent Full-Load Hours', r.eflh.toFixed(0) + ' hr/yr', 'var(--color-green)') +
         tile('Avg Operating Power', avg.avgKw.toFixed(1) + ' kW', null) +
         tile('Annual Energy', Math.round(r.annualKwh).toLocaleString() + ' kWh', null) +
         effTile +
@@ -488,14 +509,14 @@
     const traces = [{
       x: curve.cfm, y: curve.specPower, type: 'scatter',
       mode: config.type === 'vfd' ? 'lines' : 'lines+markers',
-      line: { color: '#013ecd', width: 2 }, marker: { color: '#013ecd', size: 8 },
+      line: { color: cssVar('--color-cobalt', '#013ecd'), width: 2 }, marker: { color: cssVar('--color-cobalt', '#013ecd'), size: 8 },
       name: 'Specific power',
       hovertemplate: '%{x:.0f} CFM<br>%{y:.2f} kW/100cfm<extra></extra>'
     }];
     if (flowStats) {
       traces.push({
         x: [flowStats.avgCfm], y: [flowStats.specPower], type: 'scatter', mode: 'markers',
-        marker: { color: '#ff7700', size: 13, line: { color: '#ffffff', width: 1.5 } },
+        marker: { color: cssVar('--color-orange', '#ff7700'), size: 13, line: { color: cssVar('--color-white', '#ffffff'), width: 1.5 } },
         name: 'Typical operation',
         hovertemplate: 'Typical operation<br>%{x:.0f} CFM<br>%{y:.2f} kW/100cfm<extra></extra>'
       });
@@ -509,7 +530,7 @@
       layout.shapes = [{
         type: 'rect', xref: 'x', yref: 'paper',
         x0: flowStats.flowP10, x1: flowStats.flowP90, y0: 0, y1: 1,
-        fillcolor: 'rgba(255,119,0,0.10)', line: { width: 0 }, layer: 'below'
+        fillcolor: cssVarAlpha('--color-orange', 0.10, '#ff7700'), line: { width: 0 }, layer: 'below'
       }];
     }
 
@@ -539,7 +560,7 @@
     if (!cached || !cached.text) return;
     notice.style.display = 'block';
     notice.innerHTML = 'A previously uploaded file is available: <strong>' + cached.name + '</strong>. ' +
-      '<button id="reuseBtn" style="margin-left: 8px; padding: 4px 10px; background: var(--md-primary-fg-color); color: white; border: none; border-radius: 4px; cursor: pointer;">Reuse it</button>';
+      '<button id="reuseBtn" style="margin-left: 8px; padding: 4px 10px; background: var(--md-primary-fg-color); color: var(--color-white); border: none; border-radius: 4px; cursor: pointer;">Reuse it</button>';
     document.getElementById('reuseBtn').addEventListener('click', function () {
       ingest(cached.text, cached.name, false);
       notice.style.display = 'none';

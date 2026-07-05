@@ -522,7 +522,7 @@
   // Inline validation message markup (replaces alert()). Themed via CSS vars.
   function errorHTML(msg) {
     return '<div class="pp-error" role="alert" style="margin: 10px 0; padding: 10px 12px; ' +
-      'border-radius: 6px; background: rgba(219,41,85,0.10); color: var(--color-crimson, #db2955); ' +
+      'border-radius: 6px; background: color-mix(in srgb, var(--color-crimson) 10%, transparent); color: var(--color-crimson); ' +
       'font-size: 0.9em;">' + msg + '</div>';
   }
 
